@@ -1,5 +1,6 @@
 from ..Blender_Effect.object import create_object
 from ..Backend.particle_data import SPHParticleData
+from ..Backend.grid_to_surface import SurfaceData
 
 import numpy as np
 import bpy
@@ -69,12 +70,12 @@ def surface_frame_update(frame, mesh, position_scale=1.0, center=True):
     Update surface mesh per frame.
     frame : dict with keys 'vertices' and 'faces'
     """
-    verts = np.array(frame["vertices"], dtype=np.float32) * position_scale
+    verts = np.array(frame.vertices, dtype=np.float32) * position_scale
     if center:
         verts -= verts.mean(axis=0)
 
     mesh.clear_geometry()
-    mesh.from_pydata(verts.tolist(), [], frame["faces"])
+    mesh.from_pydata(verts.tolist(), [], frame.faces.tolist())
     mesh.update()
 
 ## Main Function
@@ -91,7 +92,7 @@ def setup_mesh_animation(
     Parameters
     ----------
     frames_data : list
-        List of particle or surface data per frame.
+        List of SPHParticleData or SurfaceData per frame.
     object_name : str
         Name of the Blender object.
     frame_update_fn : callable
@@ -103,7 +104,7 @@ def setup_mesh_animation(
     center : bool
         Whether to center vertices/particles per frame.
     """
-    if isinstance(frames_data, dict):
+    if isinstance(frames_data, SPHParticleData) or isinstance(frames_data, SurfaceData):
         frames_data = [frames_data]
 
     num_frames = len(frames_data)
@@ -130,7 +131,7 @@ def setup_mesh_animation(
         if isinstance(frame, SPHParticleData):
             particle_frame_update(frame, mesh, position_scale, center)
         
-        else:
+        elif isinstance(frame, SurfaceData):
             surface_frame_update(frame, mesh, position_scale, center)
 
         # Tag handler for removal
