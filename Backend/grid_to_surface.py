@@ -42,11 +42,15 @@ def grid_to_surface(
     dy = 1 / grid_data.dims[1]
     dz = 1 / grid_data.dims[2]
     
-    verts, faces, normals, _ = measure.marching_cubes(
-        volume=grid_data.fields[field],
-        level=threshold,
-        spacing=(dx, dy, dz)  
-    )
+    try:
+        verts, faces, normals, _ = measure.marching_cubes(
+            volume=grid_data.fields[field],
+            level=threshold,
+            spacing=(dx, dy, dz)  
+        )
+    except ValueError as e:
+        print(f"[WARNING] marching_cubes failed for {field}: {e}")
+        return None
     
     if center:
         verts -= verts.mean(axis=0)
@@ -169,7 +173,8 @@ def grid_to_surface_local_max(
     print("Stage 1 complete. Regions should be separated by the shell. If not, please alter the iteration.")
     print("Generating Stage 1 Sanity Check...")
 
-    def plot_sanity_check():       
+    def plot_sanity_check():
+        
         fig, axes = plt.subplots(3, 3, figsize=(15, 15))
         
         # Subplot 1: The Region Map (The 'Pincer' result)
@@ -257,9 +262,16 @@ def grid_to_surface_local_max(
     # 3. MARCHING CUBES
     # =====================
     dx, dy, dz = 1 / np.array(grid.shape)
-    verts, faces, normals, values = measure.marching_cubes(smoothed_mask, 
+    
+    try:
+        verts, faces, normals, values = measure.marching_cubes(smoothed_mask, 
                                                            level=0.5,
                                                            spacing = (dx, dy, dz) )
+    
+   
+    except ValueError as e:
+        print(f"[WARNING] marching_cubes failed for {field}: {e}")
+        return None
     
     mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
     
