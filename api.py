@@ -21,6 +21,18 @@ from .Backend.grid_to_surface import (
     grid_to_surface_local_max
 )
 
+from .Backend.swift_species_map import (
+    generate_species_fraction_fields
+)
+
+from .Backend.save_npz import (
+    save
+)
+
+from .Backend.load_npz import (
+    load
+)
+
 from .Blender_Import.high_level_import import (
     resolve_file_paths,
     load_particles_into_blender

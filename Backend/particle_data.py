@@ -4,26 +4,40 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, Union, Callable, Tuple
 
+
+
 @dataclass
 class SPHFields:
-    data: Union[Dict[str, np.ndarray], Callable[[], Dict[str, np.ndarray]]] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if callable(self.data):
-            self.data = self.data()
-        
-        if not isinstance(self.data, dict):
-            raise ValueError("SPHFields 'data' must be a dict or a callable returning a dict.")
+    data: Dict[str, np.ndarray] = field(default_factory=dict)
 
     def __getitem__(self, key: str) -> np.ndarray:
-        if key in self.data:
+        """Access fields using dictionary-style indexing."""
+        try:
             return self.data[key]
-        raise KeyError(f"Field '{key}' not found in SPH fields.")
-    
+        except KeyError:
+            raise KeyError(f"Field '{key}' not found in SPH fields.")
+
     def __getattr__(self, key: str) -> np.ndarray:
+        """Access fields using attribute-style, e.g., fields.rho"""
+        # Only intercept keys that exist in data
         if key in self.data:
             return self.data[key]
-        raise AttributeError(f"Field '{key}' not found in SPH fields.")
+        # Otherwise, let normal attribute lookup raise AttributeError
+        raise AttributeError(f"SPHFields has no attribute '{key}'")
+
+    # Safe methods for dictionary-like operations
+    def keys(self):
+        """Return all field names."""
+        return self.data.keys()
+
+    def values(self):
+        """Return all field values."""
+        return self.data.values()
+
+    def items(self):
+        """Return all (key, value) pairs."""
+        return self.data.items()
+
     
 @dataclass
 class SPHParticleData:
@@ -58,6 +72,13 @@ def load_particles(ds,
         - List of field names to extract (e.g., ['mass', 'temperature']),
             [ptype, field] can be checked by ds.derived_field_list 
         - Dict of field name to callable that returns the field array.
+            Example: 
+            def custom_field():
+                ad = ds.all_data()
+                data = ad[ptype, "SomeField"].to_value()
+                return np.ascontiguousarray(data)
+            You may use generate_species_fraction_fields to create such a dict for species fractions for SWIFT datasets.
+            However, addition fields must be added manually to the dict by callable functions.
     region : yt object or None
         A region (sphere, box) to subset particles
 

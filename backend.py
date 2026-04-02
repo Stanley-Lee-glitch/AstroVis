@@ -20,3 +20,15 @@ from .Backend.grid_to_surface import (
     SurfaceData,
     grid_to_surface_local_max
 )
+
+from .Backend.swift_species_map import (
+    generate_species_fraction_fields
+)
+
+from .Backend.save_npz import (
+    save
+)
+
+from .Backend.load_npz import (
+    load
+)
