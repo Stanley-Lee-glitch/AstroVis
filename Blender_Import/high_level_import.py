@@ -1,5 +1,6 @@
 from .mesh_animation import setup_mesh_animation
 from ..Backend.particle_data import load_particles
+from ..Backend.save_load_npz import load
 import glob
 import os
 import bpy
@@ -86,6 +87,21 @@ def load_particles_into_blender(
         data = yt.load(fpath)
         frames_data.append(load_particles(data, ptype=ptype, fields = fields, region=region))
         
-    setup_particle_mesh(frames_data = frames_data, object_name = object_name, obj= obj, position_scale = position_scale, center = center)
+    setup_mesh_animation(frames_data = frames_data, object_name = object_name, obj= obj, position_scale = position_scale, center = center)
     
     return frames_data
+
+def load_npz_into_blender(
+    file_path: str,
+    position_scale=1.0,
+    center = True
+):
+    data = load(file_path)
+    for obj_name, frames_data in data["Particles"].items() and data["Surface"].items():
+        setup_mesh_animation(frames_data=frames_data, object_name=obj_name, position_scale=position_scale, center=center)
+    for obj_name, frames_data in data["Volume"].items():
+        continue 
+    
+
+
+        

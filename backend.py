@@ -25,10 +25,8 @@ from .Backend.swift_species_map import (
     generate_species_fraction_fields
 )
 
-from .Backend.save_npz import (
-    save
-)
 
-from .Backend.load_npz import (
-    load
+from .Backend.save_load_npz import (
+    load,
+    save
 )
