@@ -37,6 +37,15 @@ class SPHFields:
     def items(self):
         """Return all (key, value) pairs."""
         return self.data.items()
+    
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHFields object with fields filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        filtered_data = {name: arr[mask] for name, arr in self.data.items()}
+        return SPHFields(data=filtered_data)
 
     
 @dataclass
@@ -53,6 +62,29 @@ class SPHParticleData:
     @property
     def N(self) -> int:
         return self.coordinates.shape[0]
+    
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHParticleData object with particles filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        if mask.dtype != bool:
+            raise ValueError("Mask must be a boolean array")
+        
+        if mask.shape[0] != self.N:
+            raise ValueError("Mask length must match number of particles")
+
+        return SPHParticleData(
+            coordinates=self.coordinates[mask],
+            masses=self.masses[mask],
+            densities=self.densities[mask],
+            smoothing_lengths=self.smoothing_lengths[mask],
+            fields=self.fields.filter(mask),
+            time=self.time,
+            units=self.units,
+            boxsize=self.boxsize
+        )
     
     
 def load_particles(ds, 
