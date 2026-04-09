@@ -8,11 +8,11 @@ def create_volume_shaders(
     species_colors: typing.Tuple = None,
     species_alpha: float = 1.0,
     emission_multiplier: float = 2.0,
-    density_attribute: str = "density"
+    density_attribute: str = "density",
 ) -> typing.Dict[str, bpy.types.Material]:
     
     """
-    Create and append volume shaders to the object. 
+    Create volume shaders to the object. 
     Existing shaders with the same name will be overwritten.
     Other existing shaders of the object will be unlinked (but not removed). 
     Default using most extreme colors from a color ramp.
@@ -94,12 +94,6 @@ def create_volume_shaders(
 
         shaders[name] = mat
         
-    for object in species_names:
-        obj = bpy.data.objects[object]
-        obj.data.materials.clear()  # Unlink all shader of the object
-        obj.data.materials.append(shaders[object])
-        print(object, shaders[object])
-
     return shaders
 
 

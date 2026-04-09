@@ -28,6 +28,7 @@ class GridLevel:
     def num_blocks(self) -> int:
         return len(self.blocks)
 
+    
 @dataclass    
 class FieldHierarchy:
     """
@@ -41,7 +42,7 @@ class FieldHierarchy:
         if level not in self.levels:
             self.levels[level] = GridLevel(level=level, cell_size=cell_size)
         self.levels[level].blocks.append(block)
-    
+        
 
 
 def load_volume(ds, vtype = "gas", fields=["density"], levels=None, region=None):

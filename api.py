@@ -33,7 +33,8 @@ from .Backend.save_load_npz import (
 
 from .Blender_Import.high_level_import import (
     resolve_file_paths,
-    load_particles_into_blender
+    load_particles_into_blender,
+    load_npz_into_blender
 )
 
 from .Blender_Import.mesh_animation import (

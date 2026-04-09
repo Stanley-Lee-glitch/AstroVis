@@ -1,7 +1,7 @@
 from .Backend.particle_data import (
     load_particles,
     SPHParticleData,
-    SPHFields
+    SPHFields,
 )
 
 from .Backend.volume_data import (
