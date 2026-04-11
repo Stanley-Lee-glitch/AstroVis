@@ -5,9 +5,6 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.ndimage import generate_binary_structure, binary_closing, binary_dilation, binary_fill_holes
 from collections import deque
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-
 
 @dataclass
 class SurfaceData:
@@ -29,7 +26,6 @@ def grid_to_surface(
     threshold: float,
     field: str = None,
     build_obj: bool = False,
-    center: bool = True
 ) -> SurfaceData:
 
     if field is None:
@@ -52,9 +48,6 @@ def grid_to_surface(
         print(f"[WARNING] marching_cubes failed for {field}: {e}")
         return None
     
-    if center:
-        verts -= verts.mean(axis=0)
-
     if build_obj:
         mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
         mesh.export(f"{field}_{threshold:.3f}.obj")
@@ -78,6 +71,7 @@ def grid_to_surface_local_max(
     smoothing: int = 25,
     outer: bool = True,
     center: bool = True,
+    plot: bool = True   
 ) -> SurfaceData:
     
     if field == None:
@@ -88,8 +82,6 @@ def grid_to_surface_local_max(
     
     grid = grid_data.fields[field]
     
-    cmap = ListedColormap(['black', 'blue', 'red', 'cyan', 'orange', 'white'])
-
     neighbor_offsets = [
         (i,j,k) for i in [-1,0,1] for j in [-1,0,1] for k in [-1,0,1] 
         if not (i==0 and j==0 and k==0)
@@ -134,6 +126,7 @@ def grid_to_surface_local_max(
     region_map = np.zeros_like(grid, dtype=np.int8)
 
     def flood_outer_sequential(seeds):
+    
         queue = deque(seeds)
         for s in seeds:
             if not solid_inner_volume[s] and not solid_shell[s]:
@@ -175,6 +168,11 @@ def grid_to_surface_local_max(
 
     def plot_sanity_check():
         
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import ListedColormap
+        
+        cmap = ListedColormap(['black', 'blue', 'red', 'cyan', 'orange', 'white'])
+
         fig, axes = plt.subplots(3, 3, figsize=(15, 15))
         
         # Subplot 1: The Region Map (The 'Pincer' result)
@@ -223,14 +221,15 @@ def grid_to_surface_local_max(
             Patch(facecolor='blue', label='Inner Region'),
             Patch(facecolor='red', label='Outer Region')
         ]
+        
         ax1.legend(handles=legend_elements, loc='upper right', fontsize='small')
 
         plt.tight_layout()
         plt.savefig(f"{field}_{volume_iteration}_{shell_iteration}_sanity_check_stage1.png", dpi=150)
         print(f"Sanity check saved to {field}_{volume_iteration}_{shell_iteration}_sanity_check_stage1.png")
-        plt.show()
 
-    plot_sanity_check()
+    if plot is True:
+        plot_sanity_check()
 
     from skimage import measure
     from scipy.ndimage import gaussian_filter
