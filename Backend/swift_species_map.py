@@ -53,7 +53,7 @@ def generate_species_fraction_fields(ds, species):
             data = np.array(all_species[:, idx])
             return np.ascontiguousarray(data)
 
-        fields[f"{mol}_fraction"] = getter
+        fields[f"{species}_fraction"] = getter
     
     else:
         print(f"Warning: Species '{species}' not found in ELEMENT_MAP or MOLECULE_MAP. Please write the callable function manually.")

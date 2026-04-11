@@ -97,7 +97,7 @@ def load_npz_into_blender(
     center = True
 ):
     data = load(file_path)
-    for obj_name, frames_data in data["Particles"].items() and data["Surface"].items():
+    for obj_name, frames_data in {**data["Particles"], **data["Surface"]}.items():
         setup_mesh_animation(frames_data=frames_data, object_name=obj_name, position_scale=position_scale, center=center)
     for obj_name, frames_data in data["Volume"].items():
         continue 

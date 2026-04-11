@@ -204,7 +204,7 @@ def select(
     Add a Geometry Nodes modifier that selects points based on attribute or proximity. 
     """
     obj = resolve_object(obj)
-    new_obj = duplicate_obj(obj, new_object_name)
+    new_obj = duplicate_object(obj, new_object_name)
     mod_name = new_object_name
 
     gn_mod, gn_group = add_gn_modifer(new_obj, mod_name)
