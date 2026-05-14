@@ -45,14 +45,25 @@ def create_object(obj_name):
     
     return obj
 
-def set_object_shader(obj, shader_name: str | None = None):
+def set_object_shader(obj, shader_name = None):
     """
     Set the shader type of an object. If shader_name is None, try to find a material containing the object's name.
     """
     obj = resolve_object(obj)
 
     if shader_name is not None:
-        mat = bpy.data.materials.get(shader_name)
+        if isinstance(shader_name, str):
+            mat = bpy.data.materials.get(shader_name)
+            
+                
+        elif isinstance(shader_name, bpy.types.Material):
+            mat = shader_name
+            
+        else:
+            raise TypeError("shader_name must be a string or bpy.types.Material")
+        
+        if mat is None:
+                print(f"Material '{shader_name}' not found.")
         
     else:
         trial = [m for m in bpy.data.materials if obj.name in m.name]
@@ -67,8 +78,6 @@ def set_object_shader(obj, shader_name: str | None = None):
         obj.data.materials.append(mat)
         print(f"Set shader '{mat.name}' for object '{obj.name}'.")
         
-    else:
-        print(f"Shader not found.")
 
 
 def list_modifiers(obj):

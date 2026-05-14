@@ -6,8 +6,9 @@ import numpy as np
 def create_volume_shaders(
     species_names: typing.List[str],
     species_colors: typing.Tuple = None,
-    species_alpha: float = 1.0,
-    emission_multiplier: float = 2.0,
+    color_low: typing.Tuple = (1.0, 0.7, 0.0, 1.0),
+    color_high: typing.Tuple = (1.0, 0.1, 0.0, 1.0),
+    emission_multiplier: float = 0.1,
     density_attribute: str = "density",
 ) -> typing.Dict[str, bpy.types.Material]:
     
@@ -19,7 +20,8 @@ def create_volume_shaders(
 
     Args:
         species_names: list of object/ species names
-        color_ramp_values: (R, G, B) color ramp
+        color_low: (R, G, B, A) color for low density
+        color_high: (R, G, B, A) color for high density
         emission_multiplier: scaling for emission
         density_attribute: attribute controlling density
 
@@ -62,22 +64,19 @@ def create_volume_shaders(
         attr_node.attribute_name = density_attribute
         attr_node.location = (-400,0)
 
-        # Color ramp with single extreme color
         ramp_node = nt.nodes.new("ShaderNodeValToRGB")
-        ramp_node.location = (-200,200)
+        ramp_node.location = (-200, 200)
         ramp_node.color_ramp.interpolation = 'LINEAR'
-        
-        # Remove default extra elements
         while len(ramp_node.color_ramp.elements) > 1:
             ramp_node.color_ramp.elements.remove(ramp_node.color_ramp.elements[1])
-        
-        # Set first handle
-        ramp_node.color_ramp.elements[0].position = 0.0
-        ramp_node.color_ramp.elements[0].color = (*species_colors[i], species_alpha)
 
-        # Add second handle at position 1.0, same color
+        # Low density color (e.g. dark blue)
+        ramp_node.color_ramp.elements[0].position = 0.0
+        ramp_node.color_ramp.elements[0].color = color_low
+
+        # High density color (e.g. bright orange)
         el = ramp_node.color_ramp.elements.new(1.0)
-        el.color = (*species_colors[i], species_alpha)
+        el.color = color_high
 
         # Math node for emission strength
         math_node = nt.nodes.new("ShaderNodeMath")
@@ -145,3 +144,110 @@ def create_mesh_shaders(
         shaders[name] = mat
 
     return shaders
+
+## For multiple grids in a single volume
+def create_combined_volume_shader(
+    species_name: str,  
+    color_low: tuple = (1.0, 0.7, 0.0, 1.0),
+    color_high: tuple = (1.0, 0.1, 0.0, 1.0), 
+    emission_multiplier: float = 0.001,
+    density_min: float = -2.0,   # your global log10 min
+    density_max: float = 2.0,    # your global log10 max
+) -> bpy.types.Material:
+    
+    bpy.context.scene.render.engine = 'CYCLES'
+    bpy.data.volumes[species_name].grids.load()
+    grid_list = list(bpy.data.volumes[species_name].grids.keys())
+    print(f"Found {len(grid_list)} grids.")
+    
+    mat_name = f"{species_name}_volshader"
+    if bpy.data.materials.get(mat_name):
+        bpy.data.materials.remove(bpy.data.materials.get(mat_name))
+    
+    mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for node in nt.nodes:
+        nt.nodes.remove(node)
+
+    output_node = nt.nodes.new("ShaderNodeOutputMaterial")
+    output_node.location = (1000, 0)
+
+    volume_outputs = []
+
+    for i, grid_name in enumerate(grid_list):
+        y_offset = i * -300
+
+        attr_node = nt.nodes.new("ShaderNodeAttribute")
+        attr_node.attribute_name = grid_name
+        attr_node.location = (-800, y_offset)
+
+        # Map Range: absolute density_min/max → 0..1
+        map_node = nt.nodes.new("ShaderNodeMapRange")
+        map_node.location = (-550, y_offset)
+        map_node.inputs['From Min'].default_value = density_min
+        map_node.inputs['From Max'].default_value = density_max
+        map_node.inputs['To Min'].default_value = 0.0
+        map_node.inputs['To Max'].default_value = 1.0
+        map_node.clamp = True  # clamp so out-of-range values don't break color ramp
+
+        ramp_node = nt.nodes.new("ShaderNodeValToRGB")
+        ramp_node.location = (-300, y_offset)
+        ramp_node.color_ramp.interpolation = 'LINEAR'
+        while len(ramp_node.color_ramp.elements) > 1:
+            ramp_node.color_ramp.elements.remove(ramp_node.color_ramp.elements[1])
+
+        # Low density color (e.g. dark blue)
+        ramp_node.color_ramp.elements[0].position = 0.0
+        ramp_node.color_ramp.elements[0].color = color_low
+
+        # High density color (e.g. bright orange)
+        el = ramp_node.color_ramp.elements.new(1.0)
+        el.color = color_high
+        
+        math_node = nt.nodes.new("ShaderNodeMath")
+        math_node.operation = 'MULTIPLY'
+        math_node.inputs[1].default_value = emission_multiplier
+        math_node.location = (-300, y_offset - 150)
+
+        volume_node = nt.nodes.new("ShaderNodeVolumePrincipled")
+        volume_node.location = (0, y_offset)
+        volume_node.inputs['Density'].default_value = 0
+
+        # Attribute → Map Range → Color Ramp + Emission
+        nt.links.new(attr_node.outputs['Fac'], map_node.inputs['Value'])
+        nt.links.new(map_node.outputs['Result'], ramp_node.inputs['Fac'])
+        nt.links.new(map_node.outputs['Result'], math_node.inputs[0])
+        nt.links.new(ramp_node.outputs['Color'], volume_node.inputs['Emission Color'])
+        nt.links.new(math_node.outputs[0], volume_node.inputs['Emission Strength'])
+
+        volume_outputs.append(volume_node.outputs['Volume'])
+
+    # Binary tree reduction
+    add_x = 350
+    level_counter = 0
+    nodes_in_current_level = len(volume_outputs)
+
+    while len(volume_outputs) > 1:
+        out1 = volume_outputs.pop(0)
+        out2 = volume_outputs.pop(0)
+
+        add_shader = nt.nodes.new("ShaderNodeAddShader")
+        
+        add_shader.location = (add_x, -level_counter * 80)
+        level_counter += 1
+
+        nt.links.new(out1, add_shader.inputs[0])
+        nt.links.new(out2, add_shader.inputs[1])
+
+        volume_outputs.append(add_shader.outputs['Shader'])
+
+        nodes_in_current_level -= 2
+        if nodes_in_current_level <= 1:
+            add_x += 220
+            nodes_in_current_level = len(volume_outputs)
+
+    if volume_outputs:
+        nt.links.new(volume_outputs[0], output_node.inputs['Volume'])
+
+    return mat

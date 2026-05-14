@@ -15,9 +15,10 @@ from .Backend.sph_particle_to_grid import (
     sph_to_grid
 )
 
+from .Backend.surface_data import SurfaceData
+
 from .Backend.grid_to_surface import (
     grid_to_surface,
-    SurfaceData,
     grid_to_surface_local_max
 )
 
@@ -31,6 +32,7 @@ from .Backend.save_load_npz import (
     save
 )
 
+
 from .Blender_Import.high_level_import import (
     resolve_file_paths,
     load_particles_into_blender,
@@ -39,6 +41,10 @@ from .Blender_Import.high_level_import import (
 
 from .Blender_Import.mesh_animation import (
     setup_mesh_animation
+)
+
+from .Blender_Import.volume_animation import (
+    setup_volume_animation
 )
 
 from .Blender_Effect.scene import SceneManager
