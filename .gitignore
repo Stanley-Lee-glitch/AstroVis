@@ -1,2 +1,6 @@
 *.hdf5
 *.athdf
+__pycache__/
+*.pyc
+*.npz
+*.vdb
