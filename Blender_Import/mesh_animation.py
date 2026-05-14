@@ -1,6 +1,6 @@
 from ..Blender_Effect.object import create_object
 from ..Backend.particle_data import SPHParticleData
-from ..Backend.grid_to_surface import SurfaceData
+from ..Backend.surface_data import SurfaceData
 
 import numpy as np
 import bpy

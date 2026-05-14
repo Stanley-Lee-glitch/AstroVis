@@ -9,10 +9,11 @@ def convert_vdb(
     file_path: str = None
 ):
     density_grid = grid_data.fields[field]
-    (x_min, y_min, z_min) = grid_data.left_edge
-    (x_max, y_max, z_max) = grid_data.right_edge
-    dim = grid_data.dims
-    dx, dy, dz = (x_max - x_min)/dim[0], (y_max - y_min)/dim[1], (z_max - z_min)/dim[2]   
+    
+    dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
+    dx, dy, dz = (grid_data.right_edge - grid_data.left_edge) / dim
+    (x_min, y_min, z_min) = grid_data.left_edge 
+    
     
     density = vdb.FloatGrid()
     density.gridClass = vdb.GridClass.FOG_VOLUME
@@ -22,7 +23,7 @@ def convert_vdb(
         [scale * dx, 0.0, 0.0, 0],
         [0.0, scale * dy, 0.0, 0],
         [0.0, 0.0, scale * dz, 0],
-        [x_min, y_min, z_min, 1.0]
+        [x_min*scale, y_min*scale, z_min*scale, 1.0]
     ], dtype=np.float64)
 
     # Create transform from matrix
@@ -38,16 +39,61 @@ def convert_vdb(
     vdb.write(file_name, grids=[density])
     
 
-def fieldhierarchy_to_vdb(
+def volume_to_vdb(
     hierarchy: FieldHierarchy,
-    field_name: str = 'density'):
-  
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0
+):
+
+    grids_to_save = []
+
     for level_id, level in hierarchy.levels.items():
         
-        for block in level.blocks:
-            if field_name not in block.fields.keys():
-                print(f"Warning: Block {block.block_id} does not have field '{field_name}'. Skipping.")
+        for block_data in level.blocks:
+            
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
                 continue
             
-            convert_vdb(block, field=field_name)
+            density_grid = block_data.fields[field]
+    
+            dim = np.array(block_data.dims) - np.array([1, 1, 1])  
+            dx, dy, dz = (block_data.right_edge - block_data.left_edge) / dim
+            (x_min, y_min, z_min) = block_data.left_edge
+            
+            density = vdb.FloatGrid()
+            density.gridClass = vdb.GridClass.FOG_VOLUME
+            density.name = f'density_l{level_id}_b{block_data.block_id}'       
+    
+            matrix = np.array([
+                [scale * dx, 0.0, 0.0, 0],
+                [0.0, scale * dy, 0.0, 0],
+                [0.0, 0.0, scale * dz, 0],
+                [x_min*scale, y_min*scale, z_min*scale, 1.0]
+            ], dtype=np.float64)
 
+            # Create transform from matrix
+            density.transform = vdb.createLinearTransform(matrix)
+            density.copyFromArray(density_grid)
+            
+            grids_to_save.append(density)
+            
+    file_name = f"{file_name_prefix}.vdb"
+    vdb.write(file_name, grids=grids_to_save)
+
+def volume_to_multiple_vdbs(
+    hierarchy: FieldHierarchy,
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0
+):
+    for level_id, level in hierarchy.levels.items():
+        for block_data in level.blocks:
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
+                continue
+            
+            file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}.vdb"
+            convert_vdb(block_data, field=field, scale=scale, file_path=file_name)
+    

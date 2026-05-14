@@ -1,24 +1,12 @@
 from skimage import measure
 import trimesh
 from .volume_data import GridBlock
-from dataclasses import dataclass
 import numpy as np
+from scipy import ndimage
 from scipy.ndimage import generate_binary_structure, binary_closing, binary_dilation, binary_fill_holes
 from collections import deque
+from .surface_data import SurfaceData
 
-@dataclass
-class SurfaceData:
-    vertices: np.ndarray       # (N,3)
-    faces: np.ndarray          # (M,3)
-    normals: np.ndarray = None # optional, (N,3)
-
-    @property
-    def N_vertices(self):
-        return self.vertices.shape[0]
-
-    @property
-    def N_faces(self):
-        return self.faces.shape[0]
 
 ## Type 1: Isosurface Extraction from a Single Grid Field
 def grid_to_surface(
@@ -294,6 +282,73 @@ def grid_to_surface_local_max(
     )
     
     
+## Method 3: Compute Hessian Matrix and Extract Ridge Surface
 
+def grid_to_ridge_surface(
+    grid_data: GridBlock,
+    field: str = None, 
+    sigma=2.5, 
+    threshold_ratio=0.1, 
+    heal_holes=True,
+    center: bool = True,
+    build_obj: bool = False
+    ):
+    """
+    Extracts a closed ridge surface from the given 3D volume data using the Hessian matrix and marching cubes.
+    """
+    
+    if field is None:
+        if len(grid_data.fields) == 1:
+            field = list(grid_data.fields.keys())[0]
+        else: 
+            field = "density"
+            
+    volume_data = grid_data.fields[field]
+    volume_data = np.squeeze(volume_data)
+
+    Dxx = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[2, 0, 0])
+    Dyy = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[0, 2, 0])
+    Dzz = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[0, 0, 2])
+    Dxy = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[1, 1, 0])
+    Dxz = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[1, 0, 1])
+    Dyz = ndimage.gaussian_filter(volume_data, sigma=sigma, order=[0, 1, 1])
+
+    hessian_matrix = np.zeros((*volume_data.shape, 3, 3), dtype=np.float32)
+    hessian_matrix[..., 0, 0] = Dxx
+    hessian_matrix[..., 1, 1] = Dyy
+    hessian_matrix[..., 2, 2] = Dzz
+    hessian_matrix[..., 0, 1] = hessian_matrix[..., 1, 0] = Dxy
+    hessian_matrix[..., 0, 2] = hessian_matrix[..., 2, 0] = Dxz
+    hessian_matrix[..., 1, 2] = hessian_matrix[..., 2, 1] = Dyz
+
+    eigenvalues = np.linalg.eigvalsh(hessian_matrix)
+    min_eigenvalue = eigenvalues[..., 0]
+
+    ridge_field = np.where(min_eigenvalue < 0, -min_eigenvalue, 0.0)
+    ridge_field = ridge_field * (volume_data - volume_data.min())
+
+    if heal_holes:
+        ridge_field = ndimage.gaussian_filter(ridge_field, sigma=1.0)
+
+    abs_threshold = ridge_field.max() * threshold_ratio
+    
+    verts, faces, normals, values = measure.marching_cubes(
+        volume=ridge_field, 
+        level=abs_threshold
+    )    
+
+    if center:
+        verts -= np.mean(verts, axis=0)
+        
+    if build_obj:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
+        mesh.export(f"{field}_ridge_surface_{sigma}_{threshold_ratio}.obj")
+        print(f"Exported surface mesh to {field}_ridge_surface_{sigma}_{threshold_ratio}.obj")
+    
+    return SurfaceData(
+        vertices=verts,
+        faces=faces,
+        normals=normals
+    )
 
         

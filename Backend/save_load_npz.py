@@ -2,9 +2,9 @@
 
 from .particle_data import SPHParticleData, SPHFields
 from .volume_data import GridBlock, GridLevel, FieldHierarchy
-from .grid_to_surface import SurfaceData
+from .surface_data import SurfaceData
 import numpy as np
-from typing import List
+import json
 
 def save(file_path: str, 
          data: dict):
@@ -75,7 +75,8 @@ def save(file_path: str,
         print(f"Saved {obj_name} with {len(frame_datas)} frame(s) as {object_registry[obj_name]['Type']}")
    
     #Storing object registry for reference
-    npz_dict[f'Object_registry'] = np.array(object_registry, dtype=object)
+    npz_dict['Object_registry'] = np.bytes_(json.dumps(object_registry))
+    
      # Save everything
     np.savez(file_path, **npz_dict)
     print(f"Saved to {file_path}")
@@ -88,7 +89,7 @@ def load(file_path: str):
     """
     data = np.load(file_path, allow_pickle=True)
 
-    object_registry = data['Object_registry'].item()
+    object_registry = json.loads(data['Object_registry'].tobytes())
     
     result = {
         "Particles": {}, # object name: [SPHParticleData, ...]
