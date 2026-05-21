@@ -19,7 +19,7 @@ from .Backend.surface_data import SurfaceData
 
 from .Backend.grid_to_surface import (
     grid_to_surface,
-    grid_to_surface_local_max
+    grid_to_ridge_surface
 )
 
 from .Backend.swift_species_map import (
