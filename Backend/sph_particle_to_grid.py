@@ -272,7 +272,7 @@ def scatter(
 
     return image
 
-# Convert SPH particle data to GridBlock (normalized to [0, 1] box)
+# Convert SPH particle data to GridBlock with center at origin and boxwidth at 1
 def sph_to_grid(
     particle_data: SPHParticleData,
     field: str = "density",
@@ -320,8 +320,8 @@ def sph_to_grid(
     
     return GridBlock(
         block_id=0,
-        left_edge=(0.0, 0.0, 0.0),
-        right_edge=(1.0, 1.0, 1.0),
+        left_edge=(-0.5, -0.5, -0.5),
+        right_edge=(0.5, 0.5, 0.5),
         dims=(res, res, res),
         fields={field: attribute_grid}
     )

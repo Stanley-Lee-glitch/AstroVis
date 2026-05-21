@@ -2,6 +2,8 @@
 
 **AstroVis** is a modular astrophysical visualization framework designed to transform simulation data into physically interpretable renders in Blender. It provides a bridge between scientific data libraries like `yt` and the powerful rendering capabilities of Blender, enabling automated and reproducible visualization workflows.
 
+
+
 ## Architecture
 
 AstroVis is structured into four distinct layers, separating scientific data processing from Blender-specific operations.

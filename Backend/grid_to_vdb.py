@@ -6,9 +6,13 @@ def convert_vdb(
     grid_data: GridBlock,
     field: str = "density",
     scale: float = 1.0,
-    file_path: str = None
+    file_path: str = None,
+    log: bool = True
 ):
-    density_grid = grid_data.fields[field]
+    density_grid = np.array(grid_data.fields[field].view(np.float32))  # Ensure data is in float32 format for VDB
+    
+    if log:
+        density_grid = np.log10(np.clip(density_grid, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
     
     dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
     dx, dy, dz = (grid_data.right_edge - grid_data.left_edge) / dim
@@ -38,12 +42,13 @@ def convert_vdb(
         
     vdb.write(file_name, grids=[density])
     
-
+## One vdb with all grids for each frame
 def volume_to_vdb(
     hierarchy: FieldHierarchy,
     field: str = 'density',
     file_name_prefix: str = "volume",
-    scale: float = 1.0
+    scale: float = 1.0,
+    log: bool = True
 ):
 
     grids_to_save = []
@@ -56,6 +61,9 @@ def volume_to_vdb(
                 print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
                 continue
             
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field].v, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
             density_grid = block_data.fields[field]
     
             dim = np.array(block_data.dims) - np.array([1, 1, 1])  
@@ -82,18 +90,37 @@ def volume_to_vdb(
     file_name = f"{file_name_prefix}.vdb"
     vdb.write(file_name, grids=grids_to_save)
 
+## Multiple VDBs for each frame
 def volume_to_multiple_vdbs(
     hierarchy: FieldHierarchy,
     field: str = 'density',
     file_name_prefix: str = "volume",
-    scale: float = 1.0
+    scale: float = 1.0,
+    log: bool = True
 ):
+    
+    if log:
+        print("Applying log scale to the data.")
+    
+    global_min = float('inf')
+    global_max = float('-inf')
+    
     for level_id, level in hierarchy.levels.items():
         for block_data in level.blocks:
             if field not in block_data.fields.keys():
                 print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
                 continue
             
-            file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}.vdb"
-            convert_vdb(block_data, field=field, scale=scale, file_path=file_name)
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field].v, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
+            global_min = min(global_min, block_data.fields[field].min())
+            global_max = max(global_max, block_data.fields[field].max())
+            
+            file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}"
+            convert_vdb(block_data, field=field, scale=scale, file_path=file_name, log=False)
+    
+    print(f"GLOBAL RANGE: Min: {global_min:.4f}, Max: {global_max:.4f}")
+    print(f"Finished exporting {len(hierarchy.levels)} levels with a total of {sum(len(level.blocks) for level in hierarchy.levels.values())} blocks to VDB files.")
+    
     

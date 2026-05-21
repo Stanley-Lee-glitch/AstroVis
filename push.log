@@ -1,0 +1,5 @@
+nohup: ignoring input
+error: /storage01/users/s1155212445/.vscode-server/cli/servers/Stable-974500e64f0d1cfdf7c9821a2a51c2cb3bf0e561/server/extensions/git/dist/askpass.sh died of signal 9
+error: unable to read askpass response from '/storage01/users/s1155212445/.vscode-server/cli/servers/Stable-974500e64f0d1cfdf7c9821a2a51c2cb3bf0e561/server/extensions/git/dist/askpass.sh'
+fatal: could not read Username for 'https://github.com': No such device or address
+error: waitpid for git-remote-https failed: No child processes

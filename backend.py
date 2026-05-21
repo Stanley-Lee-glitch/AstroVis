@@ -19,7 +19,6 @@ from .Backend.sph_particle_to_grid import (
 
 from .Backend.grid_to_surface import (
     grid_to_surface,
-    grid_to_surface_local_max,
     grid_to_ridge_surface
 )
 
