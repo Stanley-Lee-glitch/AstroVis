@@ -251,3 +251,119 @@ def create_combined_volume_shader(
         nt.links.new(volume_outputs[0], output_node.inputs['Volume'])
 
     return mat
+
+def create_plt_colourmap(
+    cmap_name: str = "viridis",
+    n_stops: int = 8,
+) -> typing.List[tuple]:
+    """
+    Sample a matplotlib colormap to get RGBA stops for Blender's ColorRamp.
+
+    Args:
+        cmap_name: name of the matplotlib colormap (e.g. 'viridis', 'inferno', 'magma')
+        n_stops: number of stops to sample from the colormap
+    
+    Returns:
+        List of tuples: [(position, R, G, B, A), ...] where position is in [0, 1] and RGBA are in [0, 1]
+    """
+    
+    import matplotlib.pyplot as plt
+    cmap = plt.get_cmap(cmap_name)
+    cmap_stops = [(float(t), *cmap(t)) for t in np.linspace(0, 1, n_stops)]
+    
+    
+    
+)
+def create_plt_shader(
+    species_name: str,
+    # --- Field Parameters ---
+    field: str = "density",
+    field_min: float = 0.0,
+    field_max: float = 1.0,
+    # --- Colormap Parameters ---
+    emission_multiplier: float = 0.1,
+    cmap_name: str = "viridis",
+    cmap_n_stops: int = 8,
+) -> bpy.types.Material:
+    """
+    Create volume shaders using a matplotlib colormap.
+    ColorRamp stops are automatically sampled from the colormap.
+
+    Args:
+        species_name:        name of the species
+        field:               field to visualize 
+        field_min:           minimum field value for Map Range node
+        field_max:           maximum field value for Map Range node
+        emission_multiplier: scaling for emission strength
+        cmap_name:           matplotlib colormap name e.g. 'viridis', 'inferno', 'magma'
+        cmap_n_stops:        number of ColorRamp stops to sample from the colormap
+
+    Returns:
+        bpy.types.Material: The created material
+    """
+    
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # --- Sample colormap stops ---
+    cmap = plt.get_cmap(cmap_name)
+    cmap_stops = [(float(t), *cmap(t)) for t in np.linspace(0, 1, cmap_n_stops)]
+
+    mat_name = f"{species_name}_volshader"
+
+    if bpy.data.materials.get(mat_name) is not None:
+        bpy.data.materials.remove(bpy.data.materials.get(mat_name))
+
+    mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    nt = mat.node_tree
+    for node in nt.nodes:
+        nt.nodes.remove(node)
+
+    # --- Nodes ---
+    output_node = nt.nodes.new("ShaderNodeOutputMaterial")
+    output_node.location = (600, 0)
+
+    volume_node = nt.nodes.new("ShaderNodeVolumePrincipled")
+    volume_node.location = (300, 0)
+    volume_node.inputs['Density'].default_value = 0
+
+    attr_node = nt.nodes.new("ShaderNodeAttribute")
+    attr_node.attribute_name = field
+    attr_node.location = (-600, 0)
+
+    map_range_node = nt.nodes.new("ShaderNodeMapRange")
+    map_range_node.location = (-350, 0)
+    map_range_node.inputs['From Min'].default_value = field_min
+    map_range_node.inputs['From Max'].default_value = field_max
+    map_range_node.inputs['To Min'].default_value = 0.0
+    map_range_node.inputs['To Max'].default_value = 1.0
+
+    ramp_node = nt.nodes.new("ShaderNodeValToRGB")
+    ramp_node.location = (-100, 200)
+    ramp_node.color_ramp.interpolation = 'LINEAR'
+
+    while len(ramp_node.color_ramp.elements) > 1:
+        ramp_node.color_ramp.elements.remove(ramp_node.color_ramp.elements[1])
+
+    # Populate stops directly from cmap — no manual color input
+    ramp_node.color_ramp.elements[0].position = cmap_stops[0][0]
+    ramp_node.color_ramp.elements[0].color = cmap_stops[0][1:]
+    for pos, r, g, b, a in cmap_stops[1:]:
+        el = ramp_node.color_ramp.elements.new(pos)
+        el.color = (r, g, b, a)
+
+    math_node = nt.nodes.new("ShaderNodeMath")
+    math_node.operation = 'MULTIPLY'
+    math_node.inputs[1].default_value = emission_multiplier
+    math_node.location = (-100, -200)
+
+    # --- Links ---
+    nt.links.new(attr_node.outputs['Fac'], map_range_node.inputs['Value'])
+    nt.links.new(map_range_node.outputs['Result'], ramp_node.inputs['Fac'])
+    nt.links.new(map_range_node.outputs['Result'], math_node.inputs[0])
+    nt.links.new(math_node.outputs[0], volume_node.inputs['Emission Strength'])
+    nt.links.new(ramp_node.outputs['Color'], volume_node.inputs['Emission Color'])
+    nt.links.new(volume_node.outputs['Volume'], output_node.inputs['Volume'])
+
+    return mat

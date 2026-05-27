@@ -9,15 +9,15 @@ def convert_vdb(
     file_path: str = None,
     log: bool = True
 ):
-    density_grid = np.array(grid_data.fields[field].view(np.float32))  # Ensure data is in float32 format for VDB
+    density_grid = np.array(grid_data.fields[field].astype(np.float32))  # Ensure data is in float32 format for VDB
     
     if log:
         density_grid = np.log10(np.clip(density_grid, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
     
     dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
     dx, dy, dz = (grid_data.right_edge - grid_data.left_edge) / dim
-    (x_min, y_min, z_min) = grid_data.left_edge 
-    
+    (x_min, y_min, z_min) = grid_data.left_edge
+
     
     density = vdb.FloatGrid()
     density.gridClass = vdb.GridClass.FOG_VOLUME
