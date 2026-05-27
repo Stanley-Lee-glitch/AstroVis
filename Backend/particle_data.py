@@ -124,10 +124,13 @@ def load_particles(ds,
 
     # Basic SPH quantities
     coordinates = data_source[ptype, "Coordinates"].to_value()
-    smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
-    if smoothing_lengths is None:
+    
+    if (ptype, "SmoothingLengths") in ds.field_list:
+        smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
+    else:
         smoothing_lengths = np.ones(coordinates.shape[0]) * 0.1  # Default smoothing length
         print("SmoothingLengths field not found; using default value of 0.1 for all particles.")
+        
     masses = data_source[ptype, "Mass"].to_value()
     densities = data_source[ptype, "Densities"].to_value()
     
