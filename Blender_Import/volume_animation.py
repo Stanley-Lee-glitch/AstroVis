@@ -4,13 +4,13 @@ from ..Blender_Effect.object import set_object_shader
 
 def setup_volume_animation(
     vdb_folder: str, 
+    material: bpy.types.Material | None = None,
     multi_vdb_per_frame: bool = False,
-    material = None
 ):
     """
     Sets up volume animation in Blender by importing VDB files per frame and controlling their visibility.
     """
-          
+             
     frame_to_filepaths = {}
 
     ## Construct frame to filepaths mapping
@@ -42,10 +42,12 @@ def setup_volume_animation(
         
         ## Import VDB files for this frame
         for filepath in filepaths:
-            bpy.ops.object.volume_import(filepath=filepath)
-            obj = bpy.context.object
-            
-            set_object_shader(obj, material)            
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            vol_data = bpy.data.volumes.new(name=filename)
+            vol_data.filepath = filepath
+            obj = bpy.data.objects.new(filename, vol_data)
+            set_object_shader(obj, material)   
+                     
             if obj.name in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.unlink(obj)
             col.objects.link(obj)
@@ -66,4 +68,5 @@ def setup_volume_animation(
             obj.hide_render = True
             obj.keyframe_insert(data_path="hide_viewport", frame=frame_num + 1)
             obj.keyframe_insert(data_path="hide_render", frame=frame_num + 1)
+
 

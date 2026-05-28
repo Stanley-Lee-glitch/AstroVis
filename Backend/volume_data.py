@@ -42,6 +42,15 @@ class FieldHierarchy:
         if level not in self.levels:
             self.levels[level] = GridLevel(level=level, cell_size=cell_size)
         self.levels[level].blocks.append(block)
+    
+    def get_info(self):
+        info = {}
+        for level, lvl_data in self.levels.items():
+            info[level] = {
+                "num_blocks": lvl_data.num_blocks,
+                "cell_size": lvl_data.cell_size,
+            }
+        return info
         
 
 

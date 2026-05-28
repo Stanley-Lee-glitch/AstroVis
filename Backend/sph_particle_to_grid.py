@@ -276,47 +276,34 @@ def scatter(
 def sph_to_grid(
     particle_data: SPHParticleData,
     field: str = "density",
-    res: int = 256
+    res: int = 256,
+    intensive: bool = True
     ) -> GridBlock :
+    
     x = (particle_data.coordinates[:, 0] / particle_data.boxsize[0]).astype(np.float64)
     y = (particle_data.coordinates[:, 1] / particle_data.boxsize[1]).astype(np.float64)
     z = (particle_data.coordinates[:, 2] / particle_data.boxsize[2]).astype(np.float64)
     h = (particle_data.smoothing_lengths / particle_data.boxsize[0]).astype(np.float32)
 
-
     m_particle = particle_data.masses.astype(np.float32)
-    rho = particle_data.densities.astype(np.float32)
+    field_values = particle_data[field].astype(np.float32) ## Allow both attribute of SPH particle and Field Data
     
-    if field == "density":
-        field_values = particle_data.densities
-    
-    elif field == 'smoothing_lengths':
-        field_values = particle_data.smoothing_lengths.astype(np.float32)
+    if intensive is True:
+        rho = particle_data.densities.astype(np.float32)
+        field_values = particle_data[field].astype(np.float32)
+        num = scatter(x, y, z, m_particle * field_values / rho, h, res)
+        den = scatter(x, y, z, m_particle / rho, h, res)
+        attribute_grid = np.zeros_like(num)
+        mask = den > 0
+        attribute_grid[mask] = num[mask] / den[mask]
+
     else:
-        field_values = particle_data.fields[field].astype(np.float32)
-
-
-    weight_num = m_particle * field_values / rho
-    weight_den = m_particle / rho
-
-    num = scatter(
-        x, y, z,
-        weight_num,
-        h,
-        res,
-    )
-
-    den = scatter(
-        x, y, z,
-        weight_den,
-        h,
-        res,
-    )
-
-    attribute_grid = np.zeros_like(num)
-    mask = den > 0
-    
-    attribute_grid[mask] = num[mask] / den[mask]
+        # Extensive — just sum, no division
+        if field == "density":
+            field_values = m_particle   # density = scatter mass directly
+        else:
+            field_values = particle_data[field].astype(np.float32)
+        attribute_grid = scatter(x, y, z, field_values, h, res)
     
     return GridBlock(
         block_id=0,

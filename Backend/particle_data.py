@@ -63,6 +63,21 @@ class SPHParticleData:
     def N(self) -> int:
         return self.coordinates.shape[0]
     
+    def __getitem__(self, key: str) -> np.ndarray:
+    # First try direct attribute (masses, densities, smoothing_lengths, etc.)
+        if hasattr(self, key):
+            return getattr(self, key)
+        # Then fall back to fields dict
+        if key in self.fields:
+            return self.fields[key]
+        raise KeyError(f"Field '{key}' not found in particle data or fields.")
+    
+    def __getattr__(self, key: str) -> np.ndarray:
+        # Look for field data
+        if "fields" in self.__dict__ and key in self.fields:
+            return self.fields[key]
+        raise AttributeError(f"'{key}' not found in particle data or fields.")
+
     def filter(self, mask: np.ndarray):
         """
         Return a new SPHParticleData object with particles filtered by mask.
@@ -128,12 +143,21 @@ def load_particles(ds,
     if (ptype, "SmoothingLengths") in ds.field_list:
         smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
     else:
-        smoothing_lengths = np.ones(coordinates.shape[0]) * 0.1  # Default smoothing length
-        print("SmoothingLengths field not found; using default value of 0.1 for all particles.")
-        
-    masses = data_source[ptype, "Mass"].to_value()
-    densities = data_source[ptype, "Densities"].to_value()
+        smoothing_lengths = np.ones(coordinates.shape[0]) * 1  # Default smoothing length
+        print("SmoothingLengths field not found; using default value of 1 for all particles.")
     
+    if (ptype, "Mass") in ds.field_list:
+        masses = data_source[ptype, "Mass"].to_value()
+    else:
+        masses = np.ones(coordinates.shape[0]) * 1  # Default mass
+        print("Mass field not found; using default value of 1 for all particles.")
+
+    if (ptype, "Densities") in ds.field_list:
+        densities = data_source[ptype, "Densities"].to_value()
+    else:
+        densities = np.ones(coordinates.shape[0]) * 1  # Default density
+        print("Densities field not found; using default value of 1 for all particles.")
+
     boxsize = ds.domain_width.to_value() if ds.domain_width is not None else None
 
     # Particle fields 
