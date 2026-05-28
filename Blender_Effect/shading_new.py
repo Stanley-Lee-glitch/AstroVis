@@ -294,7 +294,7 @@ def create_mesh_shaders(
     return shaders
 
 
-def create_combined_volume_shader(
+def create_multiple_grid_shader(
     species_name: str,
     field_min: float = 0.0,
     field_max: float = 1.0,

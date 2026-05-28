@@ -72,7 +72,7 @@ def save(file_path: str,
                 if item.normals is not None:
                     npz_dict[f'{prefix}_surface_normals'] = item.normals
         
-        print(f"Saved {obj_name} with {len(frame_datas)} frame(s) as {object_registry[obj_name]['Type']}")
+#        print(f"Saved {obj_name} with {len(frame_datas)} frame(s) as {object_registry[obj_name]['Type']}")
    
     #Storing object registry for reference
     npz_dict['Object_registry'] = np.bytes_(json.dumps(object_registry))
