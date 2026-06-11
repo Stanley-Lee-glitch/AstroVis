@@ -25,6 +25,9 @@ class SPHFields:
         # Otherwise, let normal attribute lookup raise AttributeError
         raise AttributeError(f"SPHFields has no attribute '{key}'")
 
+    def __contains__(self, key: str) -> bool:
+        return key in self.data
+
     # Safe methods for dictionary-like operations
     def keys(self):
         """Return all field names."""

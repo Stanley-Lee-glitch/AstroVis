@@ -8,7 +8,7 @@ import numpy as np
 from numba import jit
 from .particle_data import SPHParticleData
 from .volume_data import GridBlock
-
+from typing import Union
 
 # Taken from Dehnen & Aly 2012
 kernel_gamma = 1.936492
@@ -16,7 +16,7 @@ kernel_constant = 21.0 * 0.31830988618379067154 / 2.0
 
 
 @jit(nopython=True, fastmath=True)
-def kernel(r: float | np.float32, H: float | np.float32) -> float:
+def kernel(r: Union[float, np.float32], H: Union[float, np.float32]) -> float:    
     """
     Kernel implementation for swiftsimio.
 

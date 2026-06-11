@@ -9,9 +9,9 @@ class GridBlock:
     This is the basic unit of volume data that will be converted to VDB and imported into Blender.
     """
     block_id: int
-    left_edge: Tuple[float, float, float]
-    right_edge: Tuple[float, float, float]
-    dims: Tuple[int, int, int]
+    left_edge: np.ndarray  # (3,) array of floats
+    right_edge: np.ndarray  # (3,) array of floats
+    dims: np.ndarray  # (3,) array of ints
     fields: Dict[str, np.ndarray]
 
 @dataclass
@@ -21,7 +21,7 @@ class GridLevel:
     It may or may not be contiguous in space.
     """
     level: int
-    cell_size: Tuple[float, float, float]
+    cell_size: np.ndarray  # (3,) array of floats
     blocks: List[GridBlock] = field(default_factory=list)
 
     @property
@@ -105,17 +105,17 @@ def load_volume(ds, vtype = "gas", fields=["density"], levels=None, region=None)
         else:
             data_source = grid
         
-        dims = tuple(int(d) for d in data_source.ActiveDimensions)
-        left_edge = tuple(float(d) for d in data_source.LeftEdge.to_value())
-        right_edge = tuple(float(d) for d in data_source.RightEdge.to_value())
+        dims = np.array([int(d) for d in data_source.ActiveDimensions])
+        left_edge = np.array([float(d) for d in data_source.LeftEdge.to_value()])
+        right_edge = np.array([float(d) for d in data_source.RightEdge.to_value()])
         
-        cell_size = tuple(float(d) for d in data_source.dds.to("code_length").value)
+        cell_size = np.array([float(d) for d in data_source.dds.to("code_length").value])
         
         field_dict = {}
         
         for f in fields:
             if f not in hierarchy.field_units:
-                hierarchy.field_units[f] = data_source.ds.field_info[(vtype, f)].units
+                hierarchy.field_units[f] = str(data_source.ds.field_info[(vtype, f)].units)
             
             field_dict[f] = data_source[(vtype, f)].in_base("code").v
         
