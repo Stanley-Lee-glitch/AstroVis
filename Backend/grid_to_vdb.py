@@ -15,8 +15,10 @@ def convert_vdb(
         density_grid = np.log10(np.clip(density_grid, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
     
     dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
-    dx, dy, dz = (grid_data.right_edge - grid_data.left_edge) / dim
-    (x_min, y_min, z_min) = grid_data.left_edge
+    dx, dy, dz = (np.array(grid_data.right_edge) -np.array(grid_data.left_edge)) / dim
+    (x_min, y_min, z_min) = np.array(grid_data.left_edge)
+    
+    print(f"Block {grid_data.block_id}: dx={dx:.4f}, dy={dy:.4f}, dz={dz:.4f}, x_min={x_min:.4f}, y_min={y_min:.4f}, z_min={z_min:.4f}")
 
     
     density = vdb.FloatGrid()
@@ -62,7 +64,7 @@ def volume_to_vdb(
                 continue
             
             if log:
-                block_data.fields[field] = np.log10(np.clip(block_data.fields[field].v, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
                 
             density_grid = block_data.fields[field]
     
@@ -112,7 +114,7 @@ def volume_to_multiple_vdbs(
                 continue
             
             if log:
-                block_data.fields[field] = np.log10(np.clip(block_data.fields[field].v, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
                 
             global_min = min(global_min, block_data.fields[field].min())
             global_max = max(global_max, block_data.fields[field].max())

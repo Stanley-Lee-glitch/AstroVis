@@ -76,7 +76,7 @@ def load_remap_amr_volume(ds, vtype = "gas", fields=["density"], block_per_layer
             )
             
             grid = ds.covering_grid(level=level_idx, left_edge=left, dims=dims)
-            data = {field: grid[field] for field in fields}
+            data = {field: grid[field].v for field in fields}
             
             # Create block object
             block = GridBlock(
