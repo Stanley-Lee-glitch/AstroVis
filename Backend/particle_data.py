@@ -60,7 +60,8 @@ class SPHParticleData:
     fields: SPHFields
     time: float
     units: Dict[str, object] = field(default_factory=dict)
-    boxsize: Tuple[float, float, float] = None
+    left_edge: np.ndarray = None
+    right_edge: np.ndarray = None
 
     @property
     def N(self) -> int:
@@ -101,7 +102,8 @@ class SPHParticleData:
             fields=self.fields.filter(mask),
             time=self.time,
             units=self.units,
-            boxsize=self.boxsize
+            left_edge=self.left_edge,
+            right_edge=self.right_edge
         )
     
     
@@ -142,26 +144,36 @@ def load_particles(ds,
 
     # Basic SPH quantities
     coordinates = data_source[ptype, "Coordinates"].to_value()
-    
+
+    print(f"\n{'='*50}")
+    print(f"Loading {coordinates.shape[0]} particles of type '{ptype}' with field '{fields}'.")
+    print(f"{'='*50}")
+        
     if (ptype, "SmoothingLengths") in ds.field_list:
         smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
+        print(f"  SmoothingLengths field found for {smoothing_lengths.shape[0]} particles.")
     else:
-        smoothing_lengths = np.ones(coordinates.shape[0]) * 1  # Default smoothing length
-        print("SmoothingLengths field not found; using default value of 1 for all particles.")
+        smoothing_lengths = np.ones(coordinates.shape[0]) * 1  
+        print("  SmoothingLengths field not found; using 1 for all particles.")
     
     if (ptype, "Mass") in ds.field_list:
         masses = data_source[ptype, "Mass"].to_value()
+        print(f"  Mass field found for {masses.shape[0]} particles.")
     else:
-        masses = np.ones(coordinates.shape[0]) * 1  # Default mass
-        print("Mass field not found; using default value of 1 for all particles.")
+        masses = np.ones(coordinates.shape[0]) * 1  
+        print("  Mass field not found; using 1 for all particles.")
 
     if (ptype, "Densities") in ds.field_list:
         densities = data_source[ptype, "Densities"].to_value()
+        print(f"  Densities field found for {densities.shape[0]} particles.")
     else:
         densities = np.ones(coordinates.shape[0]) * 1  # Default density
-        print("Densities field not found; using default value of 1 for all particles.")
+        print("  Densities field not found; using 1 for all particles.")
 
-    boxsize = ds.domain_width.to_value() if ds.domain_width is not None else None
+    left_edge = ds.domain_left_edge.to_value() if ds.domain_left_edge is not None else None
+    print(f"  Left edge: {left_edge}")
+    right_edge = ds.domain_right_edge.to_value() if ds.domain_right_edge is not None else None
+    print(f"  Right edge: {right_edge}")
 
     # Particle fields 
     field_data = {}
@@ -169,11 +181,13 @@ def load_particles(ds,
         if isinstance(fields, list):
             for f in fields:
                 field_data[f] = data_source[ptype, f].to_value()
+                print(f"  Field '{f}' loaded for {field_data[f].shape[0]} particles.")
         
         elif isinstance(fields, dict):
             for f, func in fields.items():
                 if callable(func):
                     field_data[f] = func()
+                    print(f"  Field '{f}' loaded via callable for {field_data[f].shape[0]} particles.")
                 else:
                     raise ValueError(f"Field '{f}' in fields dict must be a callable returning an array.")
         else:
@@ -186,6 +200,9 @@ def load_particles(ds,
         "mass": (ds.mass_unit.v, str(ds.mass_unit.units)),
         "time": (ds.time_unit.v, str(ds.time_unit.units)),
     }
+    
+    print(f"  Units: {unit_dict}")
+    print(f"{'='*50}")
    
     return SPHParticleData(
         coordinates=coordinates,
@@ -195,5 +212,6 @@ def load_particles(ds,
         fields=sph_fields_data,
         time=ds.current_time.v, 
         units=unit_dict,
-        boxsize=boxsize
+        left_edge=left_edge,
+        right_edge=right_edge
     )

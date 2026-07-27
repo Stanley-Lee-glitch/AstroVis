@@ -27,9 +27,12 @@ from .Backend.swift_species_map import (
 )
 
 
-from .Backend.save_load_npz import (
+from .Backend.save_load_hdf5 import (
     load,
-    save
+    save,
+    get_summary,
+    inspect,
+    validate
 )
 
 

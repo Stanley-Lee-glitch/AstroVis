@@ -277,13 +277,21 @@ def sph_to_grid(
     particle_data: SPHParticleData,
     field: str = "density",
     res: int = 256,
-    intensive: bool = True
+    intensive: bool = True,
+    center: bool = False,
     ) -> GridBlock :
     
-    x = (particle_data.coordinates[:, 0] / particle_data.boxsize[0]).astype(np.float64)
-    y = (particle_data.coordinates[:, 1] / particle_data.boxsize[1]).astype(np.float64)
-    z = (particle_data.coordinates[:, 2] / particle_data.boxsize[2]).astype(np.float64)
-    h = (particle_data.smoothing_lengths / particle_data.boxsize[0]).astype(np.float32)
+    print(f"\n{'='*50}")
+    print(f"Converting SPH particle data to grid with resolution {res} and field '{field}'...")
+    print(f"{'='*50}")
+    
+    boxsize = particle_data.right_edge - particle_data.left_edge
+    print(f"  Boxsize: {boxsize}")
+    
+    x = (particle_data.coordinates[:, 0] / boxsize[0]).astype(np.float64)
+    y = (particle_data.coordinates[:, 1] / boxsize[1]).astype(np.float64)
+    z = (particle_data.coordinates[:, 2] / boxsize[2]).astype(np.float64)
+    h = (particle_data.smoothing_lengths / boxsize[0]).astype(np.float32)
 
     m_particle = particle_data.masses.astype(np.float32)
     field_values = particle_data[field].astype(np.float32) ## Allow both attribute of SPH particle and Field Data
@@ -296,19 +304,35 @@ def sph_to_grid(
         attribute_grid = np.zeros_like(num)
         mask = den > 0
         attribute_grid[mask] = num[mask] / den[mask]
+        print(f"  Intensive field '{field}' computed successfully.")
 
     else:
         # Extensive — just sum, no division
         if field == "density":
             field_values = m_particle   # density = scatter mass directly
+            print(f"  Extensive field '{field}' computed successfully.")
         else:
             field_values = particle_data[field].astype(np.float32)
+            print(f"  Extensive field '{field}' computed successfully.")
         attribute_grid = scatter(x, y, z, field_values, h, res)
     
+    if center:
+        left_edge = particle_data.left_edge - boxsize / 2.0
+        right_edge = particle_data.right_edge - boxsize / 2.0
+        print(f"  Centering grid: left_edge={left_edge}, right_edge={right_edge}")
+    else:
+        left_edge = particle_data.left_edge
+        right_edge = particle_data.right_edge
+        print(f"  Grid edges: left_edge={left_edge}, right_edge={right_edge}")
+        
+    print(f"  Conversion completed successfully.")
+    print(f"{'='*50}")
+    
+        
     return GridBlock(
         block_id=0,
-        left_edge=(-0.5, -0.5, -0.5),
-        right_edge=(0.5, 0.5, 0.5),
-        dims=(res, res, res),
+        left_edge= left_edge,
+        right_edge= right_edge,
+        dims=np.array([res, res, res]),
         fields={field: attribute_grid}
     )
