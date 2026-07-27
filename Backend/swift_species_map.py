@@ -25,7 +25,7 @@ MOLECULE_MAP = {
 
 def generate_species_fraction_fields(ds, species):
     """
-    Automatically generate fraction getter functions for species fraction.
+    Automatically generate fraction getter functions for species fraction for SWIFT.
     Returns a dict: { "<species>_fraction": getter_function }
     """
     ad = ds.all_data()

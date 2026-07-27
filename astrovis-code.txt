@@ -1,0 +1,4257 @@
+# Table of Contents
+- .gitignore
+- vdb.py
+- api.py
+- backend.py
+- Readme.md
+- __init__.py
+- push.log
+- Backend/grid_remap.py
+- Backend/particle_data.py
+- Backend/surface_data.py
+- Backend/sph_particle_to_grid.py
+- Backend/swift_species_map.py
+- Backend/volume_data.py
+- Backend/__init__.py
+- Backend/grid_to_surface.py
+- Backend/grid_to_vdb.py
+- Backend/save_load_npz.py
+- Blender_Import/high_level_import.py
+- Blender_Import/volume_animation.py
+- Blender_Import/__init__.py
+- Blender_Import/mesh_animation.py
+- Blender_Effect/object.py
+- Blender_Effect/node.py
+- Blender_Effect/scene.py
+- Blender_Effect/__init__.py
+- Blender_Effect/shading.py
+- Example/Rendering Surface.ipynb
+- Example/Rendering Volume Snapshots.ipynb
+- Example/Rendering Particle Mesh.ipynb
+
+## File: .gitignore
+
+- Extension: 
+- Language: unknown
+- Size: 46 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 13:29:34
+
+### Code
+
+```unknown
+*.hdf5
+*.athdf
+__pycache__/
+*.pyc
+*.npz
+*.vdb
+
+```
+
+## File: vdb.py
+
+- Extension: .py
+- Language: python
+- Size: 268 bytes
+- Created: 2026-05-28 15:14:22
+- Modified: 2026-05-28 15:14:22
+
+### Code
+
+```python
+from .Backend.grid_to_vdb import convert_vdb, volume_to_vdb, volume_to_multiple_vdbs
+from .Backend.volume_data import load_volume, GridBlock, GridLevel, FieldHierarchy
+from .Backend.save_load_npz import load, save
+from .Backend.grid_remap import load_remap_amr_volume
+
+```
+
+## File: api.py
+
+- Extension: .py
+- Language: python
+- Size: 1396 bytes
+- Created: 2026-06-12 17:45:25
+- Modified: 2026-06-12 17:45:25
+
+### Code
+
+```python
+from .Backend.particle_data import (
+    load_particles,
+    SPHParticleData,
+    SPHFields
+)
+
+from .Backend.volume_data import (
+    load_volume,
+    GridBlock,
+    GridLevel,
+    FieldHierarchy
+)
+
+from .Backend.sph_particle_to_grid import (
+    sph_to_grid
+)
+
+from .Backend.surface_data import SurfaceData
+
+from .Backend.grid_to_surface import (
+    grid_to_surface,
+    grid_to_ridge_surface
+)
+
+from .Backend.swift_species_map import (
+    generate_species_fraction_fields
+)
+
+
+from .Backend.save_load_npz import (
+    load,
+    save
+)
+
+
+from .Blender_Import.high_level_import import (
+    resolve_file_paths,
+    load_particles_into_blender,
+    load_npz_into_blender
+)
+
+from .Blender_Import.mesh_animation import (
+    setup_mesh_animation
+)
+
+from .Blender_Import.volume_animation import (
+    setup_volume_animation
+)
+
+from .Blender_Effect.scene import SceneManager
+from .Blender_Effect.object import (
+    resolve_object,
+    duplicate_object,
+    create_object,
+    list_modifiers,
+    delete_modifier,
+    add_gn_modifer,
+    move_modifier,
+    set_object_shader
+)
+from .Blender_Effect.node import (
+    sph_point_to_volume,
+    sph_point_to_mesh,
+    select
+)
+from .Blender_Effect.shading import (
+    create_volume_shaders,
+    create_mesh_shaders,
+    create_multiple_grid_shader,
+    create_volume_field_shader
+)
+
+```
+
+## File: backend.py
+
+- Extension: .py
+- Language: python
+- Size: 601 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-21 01:34:43
+
+### Code
+
+```python
+from .Backend.particle_data import (
+    load_particles,
+    SPHParticleData,
+    SPHFields,
+)
+
+from .Backend.volume_data import (
+    load_volume,
+    GridBlock,
+    GridLevel,
+    FieldHierarchy
+)
+
+from .Backend.surface_data import SurfaceData
+
+from .Backend.sph_particle_to_grid import (
+    sph_to_grid
+)
+
+from .Backend.grid_to_surface import (
+    grid_to_surface,
+    grid_to_ridge_surface
+)
+
+from .Backend.swift_species_map import (
+    generate_species_fraction_fields
+)
+
+
+from .Backend.save_load_npz import (
+    load,
+    save
+)
+
+from .Backend.grid_remap import (
+    load_remap_amr_volume
+)
+```
+
+## File: Readme.md
+
+- Extension: .md
+- Language: markdown
+- Size: 8125 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 16:04:07
+
+### Code
+
+```markdown
+# AstroVis
+
+**AstroVis** is a modular astrophysical visualization framework designed to transform simulation data into physically interpretable renders in Blender. It provides a bridge between scientific data libraries like `yt` and the powerful rendering capabilities of Blender, enabling automated and reproducible visualization workflows.
+
+
+
+## Architecture
+
+AstroVis is structured into four distinct layers, separating scientific data processing from Blender-specific operations.
+
+1.  **Backend**: Blender-independent scientific data manipulation.
+    -   Store particle and grid data.
+    -   Convert SPH particle data to a grid.
+    -   Convert grid data to a surface (isosurface) or volume (VDB).
+    -   Can be run inside or outside of Blender.
+
+2.  **Blender\_Import**: Imports the processed data into Blender.
+    -   Load particle animations.
+    -   Load surface mesh animations.
+    -   Load VDB volume animations.
+
+3.  **Blender\_Effect**: Controls rendering and visual effects inside Blender.
+    -   Procedurally generate geometry with Geometry Nodes.
+    -   Create and assign physically-interpretable shaders.
+    -   Manage scene settings, lighting, and object properties.
+
+4.  **Blender\_Export**: Handles the final output.
+    -   Video rendering.
+    -   Sketchfab export.
+
+## Installation
+
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/stanley-lee-glitch/AstroVis.git
+    ```
+
+2.  **Install Dependencies**
+    AstroVis relies on several scientific Python libraries. These can be installed in your preferred Python environment.
+    ```bash
+    pip install yt numpy numba scikit-image trimesh pyopenvdb
+    ```
+    *Note: `pyopenvdb` requires Python 3.8 or compatible versions.*
+
+3.  **Setup in Blender**
+    To use the full framework, make the `AstroVis` modules available to Blender's internal Python environment. The simplest way is to add the cloned repository's path to Blender's script paths:
+    `Edit > Preferences > File Paths > Data > Scripts`.
+
+## Usage Guide
+
+The typical workflow involves two main stages:
+1.  **Backend Processing**: Load and convert your simulation data into a render-friendly format (`.npz` for meshes, `.vdb` for volumes). This can be done in a standard Python script.
+2.  **Blender Workflow**: Import the processed data into Blender and apply visual effects using the AstroVis API within Blender's scripting environment.
+
+### 1. Backend: Data Processing
+
+The backend layer performs all physics-aware data processing and can be executed entirely outside of Blender.
+
+#### Loading SPH Particle Data
+
+Use `load_particles` to extract coordinates, smoothing lengths, masses, densities, and other specified fields from a `yt` dataset.
+
+**Basic Example:**
+```python
+from AstroVis.backend import *
+import yt
+
+ds = yt.load("output_7bin_HHeZdust_real_0060.hdf5")
+particles = load_particles(ds, ptype="PartType0", fields=["Mass"])
+```
+
+**Using Custom (Callable) Fields:**
+You can define functions to compute derived fields on the fly.
+```python
+import numpy as np
+import yt
+
+ds = yt.load("output_7bin_HHeZdust_real_0060.hdf5")
+ad = ds.all_data()
+
+def HI_fraction():
+    return np.ascontiguousarray(ad['PartType0', "SpeciesFractions"][:, 1])
+
+# Pass the function in a dictionary
+particles_with_HI = load_particles(
+    ds,
+    ptype="PartType0",
+    fields={"HI_fraction": HI_fraction}
+)
+```
+
+#### Loading Volumetric (AMR) Data
+
+Use `load_volume` for grid-based data, which organizes the data into a hierarchy of refinement levels and blocks.
+
+```python
+import yt
+from AstroVis.backend import load_volume
+
+ds = yt.load("DiskForm.hydro.00140.athdf")
+protostar_volume = load_volume(ds, vtype="gas", fields=["density"])
+
+# Access data from a specific block
+density_grid = protostar_volume.levels[0].blocks[0].fields['density']
+```
+
+#### Data Conversion
+
+AstroVis provides tools to convert between data representations.
+
+**1. SPH Particles → Grid**
+Convert SPH data into a uniform grid representation for a specific field.
+```python
+# Convert particles to a 128x128x128 grid based on "HI_fraction"
+HI_grid = sph_to_grid(particles_with_HI, field="HI_fraction", res=128)
+```
+
+**2. Grid → Surface Mesh**
+Extract an isosurface from a grid using a threshold value (marching cubes).
+```python
+# Create a surface where the HI fraction is 0.5
+HI_surface = grid_to_surface(HI_grid, threshold=0.5, field="HI_fraction")
+
+# Export the surface data to an .npz file for Blender
+np.savez("stromgren_surface.npz", **HI_surface.__dict__)
+```
+
+**3. Grid → VDB Volume**
+Convert a grid block into a `.vdb` file for volumetric rendering in Blender.
+```python
+from AstroVis.Backend.grid_to_vdb import convert_vdb
+
+# Assuming protostar_volume is loaded from the AMR example
+first_block = protostar_volume.levels[0].blocks[0]
+convert_vdb(first_block, output_path="density.vdb")
+```
+
+### 2. Blender: Importing and Animating Data
+
+These functions must be run from within Blender's Python scripting environment.
+
+#### Importing Mesh Animations
+
+The `setup_mesh_animation` function can import sequences of particle or surface data to create frame-by-frame animations.
+
+**1. Prepare Frame Data (Outside Blender)**
+First, process each simulation snapshot and collect the results. This example creates surface data for each frame.
+```python
+# This part is run in a standard Python environment
+import numpy as np
+import yt
+from AstroVis.backend import *
+
+all_surface_frames = []
+file_list = sorted(glob.glob("path/to/sim/output_*.hdf5"))
+
+for f in file_list:
+    ds = yt.load(f)
+    # ... (load particles, convert to grid, etc.) ...
+    HI_grid = sph_to_grid(...)
+    surface_data = grid_to_surface(HI_grid, 0.5)
+    all_surface_frames.append(surface_data)
+
+# Save the entire animation sequence
+np.savez("surface_animation.npz", frames=all_surface_frames)
+```
+
+**2. Import Animation (Inside Blender)**
+Load the `.npz` file in Blender and set up the animation.
+```python
+# This part is run in Blender's script editor
+import bpy
+import numpy as np
+from AstroVis.Blender_Import.mesh_animation import setup_mesh_animation
+
+# Load the pre-processed frame data
+data = np.load("path/to/surface_animation.npz", allow_pickle=True)
+animation_frames = data['frames']
+
+# Create the animated object in Blender
+setup_mesh_animation(
+    animation_frames,
+    object_name="HI_Front_Animation",
+    position_scale=20
+)
+```
+
+### 3. Blender: Applying Visual Effects
+
+The `Blender_Effect` module provides high-level functions to apply Geometry Nodes and shaders to your imported objects.
+
+#### Geometry Nodes
+
+Automate the creation of node setups for common visualization tasks.
+
+**SPH Particles → Volume**
+Render SPH particles as a volume.
+```python
+from AstroVis.Blender_Effect.node import sph_point_to_volume
+
+# 'particle_obj' is the animated particle object in Blender
+sph_point_to_volume(
+    obj='particle_obj',
+    attribute_name='density', # Use 'density' attribute to drive volume
+    voxel_size=0.02,
+    density=0.2
+)
+```
+
+**SPH Particles → Mesh Surface**
+Generate a solid mesh surface from particles.
+```python
+from AstroVis.Blender_Effect.node import sph_point_to_mesh
+
+sph_point_to_mesh(
+    obj='particle_obj',
+    radius_attr='smoothing_lengths', # Use smoothing length for particle radius
+    voxel_size=0.3,
+    radius_multiplier=1.1
+)
+```
+
+#### Shading
+
+Create physically-interpretable shaders for volumetric and surface renderings.
+
+**Volume Shaders**
+Generates emission-based volume shaders. Ideal for visualizing gas density or temperature.
+```python
+from AstroVis.Blender_Effect.shading import create_volume_shaders
+
+# Create shaders for one or more species (Blender objects)
+create_volume_shaders(
+    species_names=["Gas_Cloud", "Stellar_Outflow"],
+    emission_multiplier=5.0,
+    density_attribute="density" # Name of the vertex attribute driving density
+)
+```
+
+**Mesh Shaders**
+Generates standard surface shaders with emission.
+```python
+from AstroVis.Blender_Effect.shading import create_mesh_shaders
+
+create_mesh_shaders(
+    species_names=["HI_Front_Animation"],
+    base_color=(0.8, 0.1, 0.1, 1.0),
+    emission_color=(1.0, 0.2, 0.2, 1.0),
+    emission_strength=2.0
+)
+```
+
+## File: __init__.py
+
+- Extension: .py
+- Language: python
+- Size: 0 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+
+```
+
+## File: push.log
+
+- Extension: .log
+- Language: log
+- Size: 522 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 14:37:52
+
+### Code
+
+```log
+nohup: ignoring input
+error: /storage01/users/s1155212445/.vscode-server/cli/servers/Stable-974500e64f0d1cfdf7c9821a2a51c2cb3bf0e561/server/extensions/git/dist/askpass.sh died of signal 9
+error: unable to read askpass response from '/storage01/users/s1155212445/.vscode-server/cli/servers/Stable-974500e64f0d1cfdf7c9821a2a51c2cb3bf0e561/server/extensions/git/dist/askpass.sh'
+fatal: could not read Username for 'https://github.com': No such device or address
+error: waitpid for git-remote-https failed: No child processes
+
+```
+
+## File: Backend/grid_remap.py
+
+- Extension: .py
+- Language: python
+- Size: 3955 bytes
+- Created: 2026-06-01 17:48:43
+- Modified: 2026-06-01 17:48:43
+
+### Code
+
+```python
+## This script remaps the overlapping grid data by ds.covering_grid from yt.
+## New block id will be the relative id of eaach level. 
+from .volume_data import load_volume, GridBlock, GridLevel, FieldHierarchy
+
+import numpy as np
+
+## Only one fields is allowed for remapping function
+
+def load_remap_amr_volume(ds, vtype = "gas", fields=["density"], block_per_layer: int = 4):
+    
+    volume = load_volume(ds, vtype=vtype, fields=fields)
+    
+    min_level = min(volume.levels.keys())
+    max_level = max(volume.levels.keys())
+    
+    
+    # 56 blocks for lower levels (excluding center) when block_per_layer is 4, 64 for max level
+    block_per_level_internal = block_per_layer ** 3 - (block_per_layer // 2) ** 3
+    
+
+    def get_block_metadata(block_id, current_level):
+        # Determine if we are at max level or an internal level
+        is_max_level = (current_level == max_level)
+        
+        if not is_max_level:
+            # Logic to skip the center 2x2x2 core of blocks
+            relative_id = block_id % block_per_level_internal
+            actual_grid_id = 0
+            valid_count = 0
+            for i in range(block_per_layer ** 3):
+                ix, iy, iz = i % block_per_layer, (i // block_per_layer) % block_per_layer, (i // (block_per_layer ** 2)) % block_per_layer
+                is_center = all(1 <= idx <= block_per_layer / 2 for idx in (ix, iy, iz))
+                if not is_center:
+                    if valid_count == relative_id:
+                        actual_grid_id = i
+                        break
+                    valid_count += 1
+        else:
+            # Max level fills the whole 4x4x4 (64 blocks)
+            actual_grid_id = block_id % (block_per_layer ** 3)
+
+        ix = actual_grid_id % block_per_layer
+        iy = (actual_grid_id // block_per_layer) % block_per_layer
+        iz = (actual_grid_id // (block_per_layer ** 2)) % block_per_layer
+        
+        level_edge = float(ds.domain_width[0] / 2) / (2**current_level)  ## Restricted to e.g. [-0.5, 0.5] for level 0
+        block_width = (2 * level_edge) / block_per_layer ## Block width = 0.25 for level 0 and block_per_layer 4
+              
+        left_edge = np.array([
+            -level_edge + (ix * block_width),
+            -level_edge + (iy * block_width),
+            -level_edge + (iz * block_width)
+        ], dtype="float64")
+         
+        return left_edge, left_edge + block_width
+
+    # 1. First Pass: Collect metadata and identify global min/max
+    print("Remapping grids...")
+    
+    fh = FieldHierarchy(
+        unit=volume.unit,
+        field_units=volume.field_units
+    )
+    
+    for level_idx in range(min_level, max_level + 1):
+        
+        num_blocks = (block_per_layer**3) if level_idx == max_level else block_per_level_internal
+        
+        for b_id in range(num_blocks):
+            left, right = get_block_metadata(b_id, level_idx)            
+            # Use original cell size to determine dims for covering_grid, which will be used for VDB conversion
+            dims = (
+                int(ds.domain_width[0].v / (2**level_idx) / block_per_layer / volume.levels[level_idx].cell_size[0]),
+                int(ds.domain_width[1].v / (2**level_idx) / block_per_layer / volume.levels[level_idx].cell_size[1]),
+                int(ds.domain_width[2].v / (2**level_idx) / block_per_layer / volume.levels[level_idx].cell_size[2])
+            )
+            
+            grid = ds.covering_grid(level=level_idx, left_edge=left, dims=dims)
+            data = {field: grid[field].v for field in fields}
+            
+            # Create block object
+            block = GridBlock(
+                block_id=b_id, 
+                left_edge=left, 
+                right_edge=right, 
+                dims=dims, 
+                fields=data
+            )
+            
+            fh.add_block(level=level_idx, block=block, cell_size=volume.levels[level_idx].cell_size)
+    
+    return fh
+
+          
+
+
+```
+
+## File: Backend/particle_data.py
+
+- Extension: .py
+- Language: python
+- Size: 7120 bytes
+- Created: 2026-06-01 18:12:40
+- Modified: 2026-06-01 18:12:40
+
+### Code
+
+```python
+# SPH particle data structures and loading functions for yt datasets.
+
+import numpy as np
+from dataclasses import dataclass, field
+from typing import Dict, Union, Callable, Tuple
+
+
+
+@dataclass
+class SPHFields:
+    data: Dict[str, np.ndarray] = field(default_factory=dict)
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        """Access fields using dictionary-style indexing."""
+        try:
+            return self.data[key]
+        except KeyError:
+            raise KeyError(f"Field '{key}' not found in SPH fields.")
+
+    def __getattr__(self, key: str) -> np.ndarray:
+        """Access fields using attribute-style, e.g., fields.rho"""
+        # Only intercept keys that exist in data
+        if key in self.data:
+            return self.data[key]
+        # Otherwise, let normal attribute lookup raise AttributeError
+        raise AttributeError(f"SPHFields has no attribute '{key}'")
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.data
+
+    # Safe methods for dictionary-like operations
+    def keys(self):
+        """Return all field names."""
+        return self.data.keys()
+
+    def values(self):
+        """Return all field values."""
+        return self.data.values()
+
+    def items(self):
+        """Return all (key, value) pairs."""
+        return self.data.items()
+    
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHFields object with fields filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        filtered_data = {name: arr[mask] for name, arr in self.data.items()}
+        return SPHFields(data=filtered_data)
+
+    
+@dataclass
+class SPHParticleData:
+    coordinates: np.ndarray          # (N, 3)
+    smoothing_lengths: np.ndarray    # (N,)
+    masses: np.ndarray              # (N,)
+    densities: np.ndarray           # (N,)
+    fields: SPHFields
+    time: float
+    units: Dict[str, object] = field(default_factory=dict)
+    boxsize: Tuple[float, float, float] = None
+
+    @property
+    def N(self) -> int:
+        return self.coordinates.shape[0]
+    
+    def __getitem__(self, key: str) -> np.ndarray:
+    # First try direct attribute (masses, densities, smoothing_lengths, etc.)
+        if hasattr(self, key):
+            return getattr(self, key)
+        # Then fall back to fields dict
+        if key in self.fields:
+            return self.fields[key]
+        raise KeyError(f"Field '{key}' not found in particle data or fields.")
+    
+    def __getattr__(self, key: str) -> np.ndarray:
+        # Look for field data
+        if "fields" in self.__dict__ and key in self.fields:
+            return self.fields[key]
+        raise AttributeError(f"'{key}' not found in particle data or fields.")
+
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHParticleData object with particles filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        if mask.dtype != bool:
+            raise ValueError("Mask must be a boolean array")
+        
+        if mask.shape[0] != self.N:
+            raise ValueError("Mask length must match number of particles")
+
+        return SPHParticleData(
+            coordinates=self.coordinates[mask],
+            masses=self.masses[mask],
+            densities=self.densities[mask],
+            smoothing_lengths=self.smoothing_lengths[mask],
+            fields=self.fields.filter(mask),
+            time=self.time,
+            units=self.units,
+            boxsize=self.boxsize
+        )
+    
+    
+def load_particles(ds, 
+                   ptype="stars", 
+                   fields: Union[list, Dict[str, Callable[[], np.ndarray]]] = None, 
+                   region=None):
+    """
+    Load particle data from a yt dataset.
+
+    Parameters
+    ----------
+    ds : yt Dataset
+        The yt dataset object.
+    ptype : str
+        Particle type name (e.g., 'stars', 'dark_matter')
+    fields : list or dict or Callable
+        - List of field names to extract (e.g., ['mass', 'temperature']),
+            [ptype, field] can be checked by ds.derived_field_list 
+        - Dict of field name to callable that returns the field array.
+            Example: 
+            def custom_field():
+                ad = ds.all_data()
+                data = ad[ptype, "SomeField"].to_value()
+                return np.ascontiguousarray(data)
+            You may use generate_species_fraction_fields to create such a dict for species fractions for SWIFT datasets.
+            However, addition fields must be added manually to the dict by callable functions.
+    region : yt object or None
+        A region (sphere, box) to subset particles
+
+    Returns
+    -------
+    SPHParticleData
+        A structured container of particle data, including coordinates, smoothing lengths, fields, time, and units.
+    """
+    # Select all particles
+    data_source = ds.all_data() if region is None else region
+
+    # Basic SPH quantities
+    coordinates = data_source[ptype, "Coordinates"].to_value()
+    
+    if (ptype, "SmoothingLengths") in ds.field_list:
+        smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
+    else:
+        smoothing_lengths = np.ones(coordinates.shape[0]) * 1  # Default smoothing length
+        print("SmoothingLengths field not found; using default value of 1 for all particles.")
+    
+    if (ptype, "Mass") in ds.field_list:
+        masses = data_source[ptype, "Mass"].to_value()
+    else:
+        masses = np.ones(coordinates.shape[0]) * 1  # Default mass
+        print("Mass field not found; using default value of 1 for all particles.")
+
+    if (ptype, "Densities") in ds.field_list:
+        densities = data_source[ptype, "Densities"].to_value()
+    else:
+        densities = np.ones(coordinates.shape[0]) * 1  # Default density
+        print("Densities field not found; using default value of 1 for all particles.")
+
+    boxsize = ds.domain_width.to_value() if ds.domain_width is not None else None
+
+    # Particle fields 
+    field_data = {}
+    if fields is not None:
+        if isinstance(fields, list):
+            for f in fields:
+                field_data[f] = data_source[ptype, f].to_value()
+        
+        elif isinstance(fields, dict):
+            for f, func in fields.items():
+                if callable(func):
+                    field_data[f] = func()
+                else:
+                    raise ValueError(f"Field '{f}' in fields dict must be a callable returning an array.")
+        else:
+            raise ValueError("Fields parameter must be a list of field names or a dict of field name to callable.")
+                    
+    sph_fields_data = SPHFields(data=field_data)
+
+    unit_dict = {
+        "length": (ds.length_unit.v, str(ds.length_unit.units)),
+        "mass": (ds.mass_unit.v, str(ds.mass_unit.units)),
+        "time": (ds.time_unit.v, str(ds.time_unit.units)),
+    }
+   
+    return SPHParticleData(
+        coordinates=coordinates,
+        smoothing_lengths=smoothing_lengths,
+        masses=masses,
+        densities=densities,
+        fields=sph_fields_data,
+        time=ds.current_time.v, 
+        units=unit_dict,
+        boxsize=boxsize
+    )
+```
+
+## File: Backend/surface_data.py
+
+- Extension: .py
+- Language: python
+- Size: 362 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass
+class SurfaceData:
+    vertices: np.ndarray       # (N,3)
+    faces: np.ndarray          # (M,3)
+    normals: np.ndarray = None # optional, (N,3)
+
+    @property
+    def N_vertices(self):
+        return self.vertices.shape[0]
+
+    @property
+    def N_faces(self):
+        return self.faces.shape[0]
+```
+
+## File: Backend/sph_particle_to_grid.py
+
+- Extension: .py
+- Language: python
+- Size: 12041 bytes
+- Created: 2026-06-01 18:15:53
+- Modified: 2026-06-01 18:15:53
+
+### Code
+
+```python
+"""
+SPH kernel and scatter implementation adapted from swiftsimio
+(https://github.com/SWIFTSIM/swiftsimio).
+
+"""
+
+import numpy as np
+from numba import jit
+from .particle_data import SPHParticleData
+from .volume_data import GridBlock
+from typing import Union
+
+# Taken from Dehnen & Aly 2012
+kernel_gamma = 1.936492
+kernel_constant = 21.0 * 0.31830988618379067154 / 2.0
+
+
+@jit(nopython=True, fastmath=True)
+def kernel(r: Union[float, np.float32], H: Union[float, np.float32]) -> float:    
+    """
+    Kernel implementation for swiftsimio.
+
+    Parameters
+    ----------
+    r : float or np.float32
+        Distance from particle.
+
+    H : float or np.float32
+        Kernel width (i.e. radius of compact support of kernel).
+
+    Returns
+    -------
+    float
+        Contribution to density by particle at distance `r`.
+
+    Notes
+    -----
+    Swiftsimio uses the Wendland-C2 kernel as described in [1]_.
+
+    References
+    ----------
+    .. [1] Dehnen W., Aly H., 2012, MNRAS, 425, 1068
+    """
+    inverse_H = 1.0 / H
+    ratio = r * inverse_H
+
+    kernel = 0.0
+
+    if ratio < 1.0:
+        one_minus_ratio = 1.0 - ratio
+        one_minus_ratio_2 = one_minus_ratio * one_minus_ratio
+        one_minus_ratio_4 = one_minus_ratio_2 * one_minus_ratio_2
+
+        kernel = max(one_minus_ratio_4 * (1.0 + 4.0 * ratio), 0.0)
+
+        kernel *= kernel_constant * inverse_H * inverse_H * inverse_H
+
+    return kernel
+
+"""
+Basic volume render for SPH data.
+
+Takes the 3D positions of the particles and projects them onto a grid.
+"""
+
+@jit(nopython=True, fastmath=True)
+def scatter(
+    x: np.float64,
+    y: np.float64,
+    z: np.float64,
+    m: np.float32,
+    h: np.float32,
+    res: int,
+    box_x: np.float64 = 0.0,
+    box_y: np.float64 = 0.0,
+    box_z: np.float64 = 0.0,
+) -> np.ndarray:
+    """
+    Create a weighted voxel grid.
+
+    Computes contributions to a voxel grid from particles with positions
+    (`x`,`y`,`z`) with smoothing lengths `h` weighted by quantities `m`.
+    This includes periodic boundary effects.
+
+    Parameters
+    ----------
+    x : np.ndarray[np.float64]
+        Array of x-positions of the particles. Must be bounded by [0, 1].
+
+    y : np.ndarray[np.float64]
+        Array of y-positions of the particles. Must be bounded by [0, 1].
+
+    z : np.ndarray[np.float64]
+        Array of z-positions of the particles. Must be bounded by [0, 1].
+
+    m : np.ndarray[np.float32]
+        Array of masses (or otherwise weights) of the particles.
+
+    h : np.ndarray[np.float32]
+        Array of smoothing lengths of the particles.
+
+    res : int
+        The number of voxels along one axis, i.e. this returns a cube
+        of res * res * res.
+
+    box_x : np.float64
+        Box size in x, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    box_y : np.float64
+        Box size in y, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    box_z : np.float64
+        Box size in z, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    Returns
+    -------
+    np.ndarray[np.float32, np.float32, np.float32]
+        Voxel grid of quantity.
+
+    See Also
+    --------
+    scatter_parallel
+        Parallel implementation of this function.
+
+    slice_scatter
+        Create scatter plot of a slice of data.
+
+    slice_scatter_parallel
+        Create scatter plot of a slice of data in parallel.
+
+    Notes
+    -----
+    Explicitly defining the types in this function allows for a 25-50% performance
+    improvement. In our testing, using numpy floats and integers is also an improvement
+    over using the numba np.ones.
+    """
+    # Output np.array for our image
+    image = np.zeros((res, res, res), dtype=np.float32)
+    maximal_array_index = np.int32(res) - 1
+
+    # Change that integer to a float, we know that our x, y are bounded
+    # by [0, 1].
+    float_res = np.float32(res)
+    pixel_width = 1.0 / float_res
+
+    # We need this for combining with the x_pos and y_pos variables.
+    float_res_64 = np.float64(res)
+
+    # If the kernel width is smaller than this, we drop to just PIC method
+    drop_to_single_cell = pixel_width * 0.5
+
+    # Pre-calculate this constant for use with the above
+    inverse_cell_volume = float_res * float_res * float_res
+
+    if box_x == 0.0:
+        xshift_min = 0
+        xshift_max = 1
+    else:
+        xshift_min = -1  # x_min is always at x=0
+        xshift_max = int(np.ceil(1 / box_x) + 1)  # tile the box to cover [0, 1]
+    if box_y == 0.0:
+        yshift_min = 0
+        yshift_max = 1
+    else:
+        yshift_min = -1  # y_min is always at y=0
+        yshift_max = int(np.ceil(1 / box_y) + 1)  # tile the box to cover [0, 1]
+    if box_z == 0.0:
+        zshift_min = 0
+        zshift_max = 1
+    else:
+        zshift_min = -1  # z_min is always at z=0
+        zshift_max = int(np.ceil(1 / box_z) + 1)  # tile the box to cover [0, 1]
+
+    for x_pos_original, y_pos_original, z_pos_original, mass, hsml in zip(
+        x, y, z, m, h
+    ):
+        # loop over periodic copies of the particle
+        for xshift in range(xshift_min, xshift_max):
+            for yshift in range(yshift_min, yshift_max):
+                for zshift in range(zshift_min, zshift_max):
+                    x_pos = x_pos_original + xshift * box_x
+                    y_pos = y_pos_original + yshift * box_y
+                    z_pos = z_pos_original + zshift * box_z
+
+                    # Calculate the cell that this particle; use the 64 bit version of the
+                    # resolution as this is the same type as the positions
+                    particle_cell_x = np.int32(np.floor(float_res_64 * x_pos))
+                    particle_cell_y = np.int32(np.floor(float_res_64 * y_pos))
+                    particle_cell_z = np.int32(np.floor(float_res_64 * z_pos))
+
+                    # SWIFT stores hsml as the FWHM.
+                    kernel_width = kernel_gamma * hsml
+
+                    # The number of cells that this kernel spans
+                    cells_spanned = np.int32(1.0 + kernel_width * float_res)
+
+                    if (
+                        particle_cell_x + cells_spanned < 0
+                        or particle_cell_x - cells_spanned > maximal_array_index
+                        or particle_cell_y + cells_spanned < 0
+                        or particle_cell_y - cells_spanned > maximal_array_index
+                        or particle_cell_z + cells_spanned < 0
+                        or particle_cell_z - cells_spanned > maximal_array_index
+                    ):
+                        # Can happily skip this particle
+                        continue
+
+                    if kernel_width < drop_to_single_cell:
+                        # Easygame, gg
+                        if (
+                            particle_cell_x >= 0
+                            and particle_cell_x <= maximal_array_index
+                            and particle_cell_y >= 0
+                            and particle_cell_y <= maximal_array_index
+                            and particle_cell_z >= 0
+                            and particle_cell_z <= maximal_array_index
+                        ):
+                            image[
+                                particle_cell_x, particle_cell_y, particle_cell_z
+                            ] += mass * inverse_cell_volume
+                    else:
+                        # Now we loop over the square of cells that the kernel lives in
+                        for cell_x in range(
+                            # Ensure that the lowest x value is 0, otherwise we segfault
+                            max(0, particle_cell_x - cells_spanned),
+                            # Ensure that the highest x value lies within the np.array
+                            # bounds, otherwise we'll segfault (oops).
+                            min(
+                                particle_cell_x + cells_spanned, maximal_array_index + 1
+                            ),
+                        ):
+                            # The distance in x to our new favourite cell -- remember that
+                            # our x, y are all in a box of [0, 1]; calculate the distance
+                            # to the cell centre
+                            distance_x = (
+                                np.float32(cell_x) + 0.5
+                            ) * pixel_width - np.float32(x_pos)
+                            distance_x_2 = distance_x * distance_x
+                            for cell_y in range(
+                                max(0, particle_cell_y - cells_spanned),
+                                min(
+                                    particle_cell_y + cells_spanned,
+                                    maximal_array_index + 1,
+                                ),
+                            ):
+                                distance_y = (
+                                    np.float32(cell_y) + 0.5
+                                ) * pixel_width - np.float32(y_pos)
+                                distance_y_2 = distance_y * distance_y
+                                for cell_z in range(
+                                    max(0, particle_cell_z - cells_spanned),
+                                    min(
+                                        particle_cell_z + cells_spanned,
+                                        maximal_array_index + 1,
+                                    ),
+                                ):
+                                    distance_z = (
+                                        np.float32(cell_z) + 0.5
+                                    ) * pixel_width - np.float32(z_pos)
+                                    distance_z_2 = distance_z * distance_z
+
+                                    r = np.sqrt(
+                                        distance_x_2 + distance_y_2 + distance_z_2
+                                    )
+
+                                    kernel_eval = kernel(r, kernel_width)
+
+                                    image[cell_x, cell_y, cell_z] += mass * kernel_eval
+
+    return image
+
+# Convert SPH particle data to GridBlock with center at origin and boxwidth at 1
+def sph_to_grid(
+    particle_data: SPHParticleData,
+    field: str = "density",
+    res: int = 256,
+    intensive: bool = True
+    ) -> GridBlock :
+    
+    x = (particle_data.coordinates[:, 0] / particle_data.boxsize[0]).astype(np.float64)
+    y = (particle_data.coordinates[:, 1] / particle_data.boxsize[1]).astype(np.float64)
+    z = (particle_data.coordinates[:, 2] / particle_data.boxsize[2]).astype(np.float64)
+    h = (particle_data.smoothing_lengths / particle_data.boxsize[0]).astype(np.float32)
+
+    m_particle = particle_data.masses.astype(np.float32)
+    field_values = particle_data[field].astype(np.float32) ## Allow both attribute of SPH particle and Field Data
+    
+    if intensive is True:
+        rho = particle_data.densities.astype(np.float32)
+        field_values = particle_data[field].astype(np.float32)
+        num = scatter(x, y, z, m_particle * field_values / rho, h, res)
+        den = scatter(x, y, z, m_particle / rho, h, res)
+        attribute_grid = np.zeros_like(num)
+        mask = den > 0
+        attribute_grid[mask] = num[mask] / den[mask]
+
+    else:
+        # Extensive — just sum, no division
+        if field == "density":
+            field_values = m_particle   # density = scatter mass directly
+        else:
+            field_values = particle_data[field].astype(np.float32)
+        attribute_grid = scatter(x, y, z, field_values, h, res)
+    
+    return GridBlock(
+        block_id=0,
+        left_edge=(-0.5, -0.5, -0.5),
+        right_edge=(0.5, 0.5, 0.5),
+        dims=(res, res, res),
+        fields={field: attribute_grid}
+    )
+
+```
+
+## File: Backend/swift_species_map.py
+
+- Extension: .py
+- Language: python
+- Size: 3764 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+import numpy as np
+
+ELEMENT_MAP = {
+    "H": [("HI", 1), ("HII", 2), ("Hm", 3)],
+    "He": [("HeI", 4), ("HeII", 5), ("HeIII", 6)],
+    "C": [("CI", 7), ("CII", 8), ("CIII", 9), ("CIV", 10), ("CV", 11), ("CVI", 12), ("CVII", 13), ("Cm", 14)],
+    "N": [("NI", 15), ("NII", 16), ("NIII", 17), ("NIV", 18), ("NV", 19), ("NVI", 20), ("NVII", 21), ("NVIII", 22)],
+    "O": [("OI", 23), ("OII", 24), ("OIII", 25), ("OIV", 26), ("OV", 27), ("OVI", 28), ("OVII", 29), ("OVIII", 30), ("OIX", 31), ("Om", 32)],
+    "Ne": [("NeI", 33), ("NeII", 34), ("NeIII", 35), ("NeIV", 36), ("NeV", 37), ("NeVI", 38), ("NeVII", 39), ("NeVIII", 40), ("NeIX", 41), ("NeX", 42), ("NeXI", 43)],
+    "Mg": [("MgI", 44), ("MgII", 45), ("MgIII", 46), ("MgIV", 47), ("MgV", 48), ("MgVI", 49), ("MgVII", 50), ("MgVIII", 51), ("MgIX", 52), ("MgX", 53), ("MgXI", 54), ("MgXII", 55), ("MgXIII", 56)],
+    "Si": [("SiI", 57), ("SiII", 58), ("SiIII", 59), ("SiIV", 60), ("SiV", 61), ("SiVI", 62), ("SiVII", 63), ("SiVIII", 64), ("SiIX", 65), ("SiX", 66), ("SiXI", 67), ("SiXII", 68), ("SiXIII", 69), ("SiXIV", 70), ("SiXV", 71)],
+    "S": [("SI", 72), ("SII", 73), ("SIII", 74), ("SIV", 75), ("SV", 76), ("SVI", 77), ("SVII", 78), ("SVIII", 79), ("SIX", 80), ("SX", 81), ("SXI", 82), ("SXII", 83), ("SXIII", 84), ("SXIV", 85), ("SXV", 86), ("SXVI", 87), ("SXVII", 88)],
+    "Ca": [("CaI", 89), ("CaII", 90), ("CaIII", 91), ("CaIV", 92), ("CaV", 93), ("CaVI", 94), ("CaVII", 95), ("CaVIII", 96), ("CaIX", 97), ("CaX", 98), ("CaXI", 99), ("CaXII", 100), ("CaXIII", 101), ("CaXIV", 102), ("CaXV", 103), ("CaXVI", 104), ("CaXVII", 105), ("CaXVIII", 106), ("CaXIX", 107), ("CaXX", 108), ("CaXXI", 109)],
+    "Fe": [("FeI", 110), ("FeII", 111), ("FeIII", 112), ("FeIV", 113), ("FeV", 114), ("FeVI", 115), ("FeVII", 116), ("FeVIII", 117), ("FeIX", 118), ("FeX", 119), ("FeXI", 120), ("FeXII", 121), ("FeXIII", 122), ("FeXIV", 123), ("FeXV", 124), ("FeXVI", 125), ("FeXVII", 126), ("FeXVIII", 127), ("FeXIX", 128), ("FeXX", 129), ("FeXXI", 130), ("FeXXII", 131), ("FeXXIII", 132), ("FeXXIV", 133), ("FeXXV", 134), ("FeXXVI", 135), ("FeXXVII", 136)]
+}
+
+MOLECULE_MAP = {
+    "H2": 137, "H2p": 138, "H3p": 139, "OH": 140, "H2O": 141,
+    "C2": 142, "O2": 143, "HCOp": 144, "CH": 145, "CH2": 146, "CH3p": 147,
+    "CO": 148, "CHp": 149, "CH2p": 150, "OHp": 151, "H2Op": 152, "H3Op": 153,
+    "COp": 154, "HOCp": 155, "O2p": 156
+}
+
+
+
+def generate_species_fraction_fields(ds, species):
+    """
+    Automatically generate fraction getter functions for species fraction.
+    Returns a dict: { "<species>_fraction": getter_function }
+    """
+    ad = ds.all_data()
+    fields = {}
+
+    # --- Handle elements ---
+    if species in ELEMENT_MAP.keys():
+        indices = [idx for _, idx in ELEMENT_MAP[species]]  # all indices for this element
+        for name, idx in ELEMENT_MAP[species]:
+            def getter(idx=idx, indices=indices):
+                all_species = ad['PartType0', "SpeciesFractions"]
+                data = np.array(all_species[:, idx])
+                total = np.sum(all_species[:, indices], axis=1)
+                mask = total > 0
+                data[mask] = data[mask] / total[mask]
+                return np.ascontiguousarray(data)
+
+            fields[f"{name}_fraction"] = getter
+
+    # --- Handle molecules ---
+    elif species in MOLECULE_MAP.keys():
+        idx = MOLECULE_MAP[species]
+        def getter(idx=idx):
+            all_species = ad['PartType0', "SpeciesFractions"]
+            data = np.array(all_species[:, idx])
+            return np.ascontiguousarray(data)
+
+        fields[f"{species}_fraction"] = getter
+    
+    else:
+        print(f"Warning: Species '{species}' not found in ELEMENT_MAP or MOLECULE_MAP. Please write the callable function manually.")
+
+    return fields
+```
+
+## File: Backend/volume_data.py
+
+- Extension: .py
+- Language: python
+- Size: 4202 bytes
+- Created: 2026-06-01 18:12:37
+- Modified: 2026-06-01 18:12:37
+
+### Code
+
+```python
+import numpy as np
+from dataclasses import dataclass, field
+from typing import Dict, Tuple, List
+
+@dataclass
+class GridBlock:
+    """
+    A uniform rectangular grid, containing field data and metadata. 
+    This is the basic unit of volume data that will be converted to VDB and imported into Blender.
+    """
+    block_id: int
+    left_edge: np.ndarray  # (3,) array of floats
+    right_edge: np.ndarray  # (3,) array of floats
+    dims: np.ndarray  # (3,) array of ints
+    fields: Dict[str, np.ndarray]
+
+@dataclass
+class GridLevel:
+    """
+    For AMR datasets, we group blocks by their refinement level. Each level contains multiple blocks of the same cell size.
+    It may or may not be contiguous in space.
+    """
+    level: int
+    cell_size: np.ndarray  # (3,) array of floats
+    blocks: List[GridBlock] = field(default_factory=list)
+
+    @property
+    def num_blocks(self) -> int:
+        return len(self.blocks)
+
+    
+@dataclass    
+class FieldHierarchy:
+    """
+    A hierarchical structure for organizing AMR volume data by level and block with units.
+    """
+    unit: Dict[str, str]
+    field_units: Dict[str, object] = field(default_factory=dict)
+    levels: Dict[int, GridLevel] = field(default_factory=dict)
+
+    def add_block(self, level: int, block: GridBlock, cell_size):
+        if level not in self.levels:
+            self.levels[level] = GridLevel(level=level, cell_size=cell_size)
+        self.levels[level].blocks.append(block)
+    
+    def get_info(self):
+        info = {}
+        for level, lvl_data in self.levels.items():
+            info[level] = {
+                "num_blocks": lvl_data.num_blocks,
+                "cell_size": lvl_data.cell_size,
+            }
+        return info
+        
+
+
+def load_volume(ds, vtype = "gas", fields=["density"], levels=None, region=None):
+    """
+    Load AMR volume data from a yt dataset, grouped by level.
+
+    Parameters
+    ----------
+    ds : yt.Dataset
+        The yt dataset object.
+    fields : list of str or None
+        Field names, e.g. ["density", "temperature"]
+        Default: ["density"]
+    levels : list or None
+        AMR levels to include; None = all
+    region : yt data container or None
+        Optional region selector
+    field_type : str
+        yt field type (default: "gas")
+
+    Returns
+    -------
+    FieldHierarchy
+         A structured hierarchy of grid blocks organized by AMR level, containing field data and units.
+        }
+    """
+    # Initialize unit and output structure
+    
+    hierarchy = FieldHierarchy(
+        unit = {
+            "length": ds.length_unit,
+            "mass": ds.mass_unit,
+            "time": ds.time_unit,
+        }
+    )
+    
+    # Loop over block in the grids and group by level
+    for grid in ds.index.grids:
+
+        # Level restriction
+        level = int(grid.Level)
+        if levels is not None and level not in levels:
+            continue
+
+        # Region restriction
+        if region is not None:
+            selector = region & grid
+            if selector is None:
+                continue
+            data_source = selector
+        else:
+            data_source = grid
+        
+        dims = np.array([int(d) for d in data_source.ActiveDimensions])
+        left_edge = np.array([float(d) for d in data_source.LeftEdge.to_value()])
+        right_edge = np.array([float(d) for d in data_source.RightEdge.to_value()])
+        
+        cell_size = np.array([float(d) for d in data_source.dds.to("code_length").value])
+        
+        field_dict = {}
+        
+        for f in fields:
+            if f not in hierarchy.field_units:
+                hierarchy.field_units[f] = str(data_source.ds.field_info[(vtype, f)].units)
+            
+            field_dict[f] = data_source[(vtype, f)].in_base("code").v
+        
+        block = GridBlock(
+            block_id=grid.id,
+            left_edge=left_edge,
+            right_edge=right_edge,
+            dims=dims,
+            fields=field_dict
+        )
+        
+        hierarchy.add_block(level=level, block=block, cell_size=cell_size)
+
+
+    return hierarchy
+
+
+
+```
+
+## File: Backend/__init__.py
+
+- Extension: .py
+- Language: python
+- Size: 0 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+
+```
+
+## File: Backend/grid_to_surface.py
+
+- Extension: .py
+- Language: python
+- Size: 16248 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-21 02:41:30
+
+### Code
+
+```python
+from skimage import measure
+from skimage.measure import marching_cubes
+import trimesh
+import numpy as np
+from scipy import ndimage
+from scipy.spatial import cKDTree
+import matplotlib.pyplot as plt
+from .volume_data import GridBlock
+from .surface_data import SurfaceData
+
+
+# ============================================================
+# Method 1: Isosurface Extraction
+# ============================================================
+
+def grid_to_surface(
+    grid_data   : GridBlock,
+    threshold   : float,
+    field       : str  = None,
+    # --- Parameters of surface ---
+    build_obj   : bool = False,
+    center      : bool = True,
+    scale       : float = 1.0,
+    # --- Quick check ---
+    plot_surface: bool = False
+) -> SurfaceData:
+    """
+    Extract an isosurface from a 3D grid field using marching cubes.
+
+    Parameters
+    ----------
+    grid_data   : GridBlock   Input volumetric data
+    threshold   : float       Isovalue for surface extraction
+    field       : str         Field name to use (default: only/density field)
+    build_obj   : bool        If True, export mesh as .obj file
+    center      : bool        If True, center the surface at the origin
+    scale       : float       The scale factor for the surface (from the width of GridBlock)
+    plot_surface : bool       If True, plot the surface cross-section
+    """
+    if field is None:
+        field = list(grid_data.fields.keys())[0] if len(grid_data.fields) == 1 else "density"
+
+    print(f"\n{'='*50}")
+    print(f"Running Isosurface Extraction...")
+    print(f"{'='*50}")
+    print(f"  Field     : {field}")
+    print(f"  Threshold : {threshold}")
+
+    ## Assume the grid having box width of 1
+    dx = 1 / grid_data.dims[0]
+    dy = 1 / grid_data.dims[1]
+    dz = 1 / grid_data.dims[2]
+
+    try:
+        verts, faces, normals, _ = measure.marching_cubes(
+            volume  = grid_data.fields[field],
+            level   = threshold,
+            spacing = (dx, dy, dz)
+        )
+    except ValueError as e:
+        print(f"  [WARNING] marching_cubes failed for {field}: {e}")
+        return None
+
+    print(f"  Vertices  : {len(verts)}")
+    print(f"  Faces     : {len(faces)}")
+   
+    scale_factor = np.array([grid_data.right_edge[0] - grid_data.left_edge[0], 
+                             grid_data.right_edge[1] - grid_data.left_edge[1], 
+                             grid_data.right_edge[2] - grid_data.left_edge[2]]) * scale
+    verts *= scale_factor
+    print(f"  Width of domain: {scale_factor}")
+    
+    if center:
+        center_of_mass = verts.mean(axis=0)
+        verts -= center_of_mass
+        print(f"  Mesh is relocated at centered.")
+        
+    if build_obj:
+        obj_path = f"{field}_surface.obj"
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
+        mesh.export(obj_path)
+        print(f"  Exported  : {obj_path}")
+
+    if plot_surface:
+        print("  Plotting surface cross-section...") # To-do
+        
+    print(f"{'='*50}\n")
+    return SurfaceData(vertices=verts, faces=faces, normals=normals)
+
+
+# ============================================================
+# Method 2: Ridge Surface Extraction
+# ============================================================
+
+def grid_to_ridge_surface(
+    grid_data   : GridBlock,
+    field       : str  = None,
+    # --- Step 1: Ridge Detection ---
+    sigma            = 1.2,    # Gaussian smoothing. Higher = smoother, loses fine detail
+    lambda_pct       = 10,     # Percentile of l3 threshold. Higher = more surface (looser)
+    # --- Step 2: Component Filtering ---
+    min_cluster_size = 250,    # Remove components smaller than this
+    # --- Step 3: Poisson Reconstruction ---
+    normal_k         = 20,     # Neighbors for normal estimation
+    grid_sigma       = 1.5,    # Normal field smoothing
+    isovalue_pct     = 50,     # 50=median. Lower=expand surface, Higher=shrink
+    # --- Quick Checks ---
+    plot_ridge       = True,   # Plot 2D slice after ridge detection
+    print_components = True,   # Print component size table after filtering
+    plot_surface     = True,   # Plot chi field + mesh after reconstruction
+    # --- Parameter of Surface ---
+    center           = True,   # If True, center the surface at the origin
+    scale            = 1.0,    # The scale factor for the surface (from the width of GridBlock)
+    build_obj        = False,   # If True, export mesh as .obj file
+):
+    """
+    Extract a surface from a 3D volume by detecting intensity ridges.
+
+    Steps
+    -----
+    1) Ridge detection via Hessian eigenvalues + non-maximum suppression (NMS)
+    2) Connected component filtering to remove small isolated pieces
+    3) Poisson surface reconstruction via FFT to produce a smooth mesh
+
+    Parameters
+    ----------
+    grid_data        : GridBlock    The grid data containing the 3D volume
+    field            : str          The field to extract the surface from
+    sigma            : float        Gaussian smoothing before Hessian (default 1.2)
+    lambda_pct       : int          Percentile of l3 for surface threshold (default 10)
+    min_cluster_size : int          Min voxels to keep a connected component (default 250)
+    normal_k         : int          KNN neighbors for normal estimation (default 20)
+    grid_sigma       : float        Smoothing of normal vector field (default 1.5)
+    isovalue_pct     : int          Percentile of chi at ridge for isovalue (default 50)
+    scale            : float        Scale factor for the surface (default 1.0)
+    plot_ridge       : bool         Plot ridge detection result (default True)
+    print_components : bool         Print connected component table (default True)
+    plot_surface     : bool         Plot final surface result (default True)
+    build_obj        : bool         If True, export mesh as .obj file
+    center           : bool         If True, center the surface at the origin (default True)
+
+    """
+    if field is None:
+        field = list(grid_data.fields.keys())[0] if len(grid_data.fields) == 1 else "density"
+        
+    volume = grid_data.fields[field]
+    shape = volume.shape
+
+    # --------------------------------------------------------
+    # STEP 1: Ridge Detection via Hessian + NMS
+    # --------------------------------------------------------
+    print(f"\n{'='*50}")
+    print(f"Running Ridge Surface Extraction...")
+    print(f"STEP 1: Ridge Detection")
+    print(f"{'='*50}")
+    print(f"  Field        : {field}")
+    print(f"  Volume shape : {shape}")
+    print(f"  Sigma        : {sigma}")
+    print(f"  Lambda pct   : {lambda_pct}")
+
+    if volume.max() > 50:
+        volume = np.log1p(volume - volume.min())
+    smoothed = ndimage.gaussian_filter(volume, sigma=sigma)
+
+    grad_z, grad_y, grad_x = np.gradient(smoothed)
+    Izz, Izy, Izx = np.gradient(grad_z)
+    _,   Iyy, Iyx = np.gradient(grad_y)
+    _,   _,   Ixx = np.gradient(grad_x)
+
+    hessian_matrix = np.zeros((volume.size, 3, 3))
+    hessian_matrix[:, 0, 0] = Ixx.ravel()
+    hessian_matrix[:, 1, 1] = Iyy.ravel()
+    hessian_matrix[:, 2, 2] = Izz.ravel()
+    hessian_matrix[:, 0, 1] = hessian_matrix[:, 1, 0] = Iyx.ravel()
+    hessian_matrix[:, 0, 2] = hessian_matrix[:, 2, 0] = Izx.ravel()
+    hessian_matrix[:, 1, 2] = hessian_matrix[:, 2, 1] = Izy.ravel()
+
+    eigvals, eigvecs = np.linalg.eigh(hessian_matrix)
+    l3 = eigvals[:, 0].reshape(shape)
+    l2 = eigvals[:, 1].reshape(shape)
+    v3 = eigvecs[:, :, 0].reshape((*shape, 3))
+
+    lambda_th = np.percentile(l3, lambda_pct)
+    print(f"  Threshold l3 : {lambda_th:.6f}  (percentile {lambda_pct})")
+
+    wide_surface_zone = (l3 < lambda_th) & (l3 < l2)
+    print(f"  Wide zone    : {wide_surface_zone.sum()} / {volume.size} voxels")
+
+    thin_ridge_mask = np.zeros_like(volume, dtype=bool)
+    z_indices, y_indices, x_indices = np.where(wide_surface_zone)
+
+    for z, y, x in zip(z_indices, y_indices, x_indices):
+        if (z == 0 or z == shape[0]-1 or
+            y == 0 or y == shape[1]-1 or
+            x == 0 or x == shape[2]-1):
+            continue
+        normal = v3[z, y, x]
+        step   = np.round(normal).astype(int)
+        if np.all(step == 0):
+            ax       = np.argmax(np.abs(normal))
+            step[ax] = 1 if normal[ax] > 0 else -1
+        dz, dy, dx   = step
+        val_center   = smoothed[z,      y,      x     ]
+        val_forward  = smoothed[z + dz, y + dy, x + dx]
+        val_backward = smoothed[z - dz, y - dy, x - dx]
+        if val_center >= val_forward and val_center >= val_backward:
+            thin_ridge_mask[z, y, x] = True
+
+    print(f"  Ridge voxels : {thin_ridge_mask.sum()}  (after NMS)")
+
+    if plot_ridge:
+        slice_idx = shape[0] // 2
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig.suptitle(f"Step 1: Ridge Detection  |  slice z={slice_idx}  |  sigma={sigma}, lambda_pct={lambda_pct}")
+
+        axes[0].imshow(smoothed[slice_idx], cmap='gray', origin='lower')
+        axes[0].set_title("Smoothed Volume")
+
+        axes[1].imshow(smoothed[slice_idx], cmap='gray', origin='lower')
+        y_r, x_r = np.where(thin_ridge_mask[slice_idx])
+        axes[1].scatter(x_r, y_r, color='red', s=1)
+        axes[1].set_title(f"Ridge Points  (n={thin_ridge_mask.sum()})")
+
+        im3 = axes[2].imshow(l3[slice_idx], cmap='RdBu', origin='lower')
+        axes[2].set_title("l3 Hessian Eigenvalue")
+        plt.colorbar(im3, ax=axes[2])
+
+        plt.tight_layout()
+        plt.savefig(f"{field}_ridge_check.png", dpi=150)
+        plt.show()
+        print(f"  Saved        : {field}_ridge_check.png")
+
+    # --------------------------------------------------------
+    # STEP 2: Connected Component Filtering
+    # --------------------------------------------------------
+    print(f"\n{'='*50}")
+    print(f"STEP 2: Component Filtering")
+    print(f"{'='*50}")
+    print(f"  Min cluster size : {min_cluster_size}")
+
+    struct = ndimage.generate_binary_structure(3, 3)
+    labeled, num_features = ndimage.label(thin_ridge_mask, structure=struct)
+    component_sizes = np.bincount(labeled.ravel())
+    sorted_sizes    = np.sort(component_sizes[1:])[::-1]
+
+    if print_components:
+        print(f"  Total components : {num_features}")
+        print(f"\n  {'Rank':>4}  {'Size (voxels)':>14}  {'Kept?':>6}")
+        print(f"  {'-'*30}")
+        for i, s in enumerate(sorted_sizes[:30]):
+            kept = "YES" if s >= min_cluster_size else "no"
+            print(f"  #{i+1:>3}  {s:>14}  {kept:>6}")
+        if len(sorted_sizes) > 30:
+            print(f"  ... ({len(sorted_sizes)-30} more, all smaller than #{30})")
+
+    large_components    = component_sizes >= min_cluster_size
+    large_components[0] = False
+    cleaned_mask        = large_components[labeled]
+    n_kept              = int(large_components[1:].sum())
+
+    print(f"\n  Components kept  : {n_kept} / {num_features}")
+    print(f"  Voxels           : {thin_ridge_mask.sum()} → {cleaned_mask.sum()}")
+
+    # --------------------------------------------------------
+    # STEP 3: Poisson Surface Reconstruction
+    # --------------------------------------------------------
+    print(f"\n{'='*50}")
+    print(f"STEP 3: Poisson Reconstruction")
+    print(f"{'='*50}")
+    print(f"  Normal K     : {normal_k}")
+    print(f"  Grid sigma   : {grid_sigma}")
+    print(f"  Isovalue pct : {isovalue_pct}")
+
+    z_pts, y_pts, x_pts = np.where(cleaned_mask)
+    points = np.column_stack([x_pts, y_pts, z_pts]).astype(np.float32)
+    print(f"  Ridge points : {len(points)}")
+
+    tree      = cKDTree(points)
+    _, idx    = tree.query(points, k=normal_k)
+    neighbors = points[idx]
+    centered  = neighbors - neighbors.mean(axis=1, keepdims=True)
+    cov       = np.einsum('nki,nkj->nij', centered, centered)
+    _, eigvecs = np.linalg.eigh(cov)
+    normals   = eigvecs[:, :, 0].astype(np.float32)
+
+    outward   = points - points.mean(axis=0)
+    flip_mask = np.einsum('ni,ni->n', normals, outward) < 0
+    normals[flip_mask] *= -1
+    print(f"  Normals      : computed")
+
+    xi, yi, zi = x_pts.astype(int), y_pts.astype(int), z_pts.astype(int)
+    nx_grid = np.zeros(shape, dtype=np.float32)
+    ny_grid = np.zeros(shape, dtype=np.float32)
+    nz_grid = np.zeros(shape, dtype=np.float32)
+    np.add.at(nx_grid, (zi, yi, xi), normals[:, 0])
+    np.add.at(ny_grid, (zi, yi, xi), normals[:, 1])
+    np.add.at(nz_grid, (zi, yi, xi), normals[:, 2])
+    nx_grid = ndimage.gaussian_filter(nx_grid, sigma=grid_sigma)
+    ny_grid = ndimage.gaussian_filter(ny_grid, sigma=grid_sigma)
+    nz_grid = ndimage.gaussian_filter(nz_grid, sigma=grid_sigma)
+    print(f"  Normal field : splatted")
+
+    divergence = (np.gradient(nx_grid, axis=2) +
+                  np.gradient(ny_grid, axis=1) +
+                  np.gradient(nz_grid, axis=0))
+
+    div_fft          = np.fft.fftn(divergence)
+    kx               = np.fft.fftfreq(shape[2]) * 2 * np.pi
+    ky               = np.fft.fftfreq(shape[1]) * 2 * np.pi
+    kz               = np.fft.fftfreq(shape[0]) * 2 * np.pi
+    KZ, KY, KX       = np.meshgrid(kz, ky, kx, indexing='ij')
+    lap_eig          = -(KX**2 + KY**2 + KZ**2)
+    lap_eig[0, 0, 0] = 1.0
+    chi_fft          = div_fft / lap_eig
+    chi_fft[0, 0, 0] = 0.0
+    chi              = np.real(np.fft.ifftn(chi_fft)).astype(np.float32)
+    print(f"  Poisson      : solved, chi range [{chi.min():.4f}, {chi.max():.4f}]")
+
+    isovalue = np.percentile(chi[zi, yi, xi], isovalue_pct)
+    print(f"  Isovalue     : {isovalue:.6f}  (percentile {isovalue_pct})")
+
+    verts, faces, _, _ = marching_cubes(chi, level=isovalue)
+    
+    if center:
+        verts -= verts.mean(axis=0)
+        print(f"  Mesh is relocated at centered.")
+    
+    width = np.array(grid_data.right_edge) - np.array(grid_data.left_edge)
+    verts *= width * scale / np.array(shape)
+    print(f"  Width of domain: {width * scale}")
+    
+
+    print(f"\n  {'='*44}")
+    print(f"  Final Surface:")
+    print(f"  Vertices : {len(verts)}")
+    print(f"  Faces    : {len(faces)}")
+    print(f"  {'='*44}\n")
+    
+    if build_obj:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        obj_path = f"{field}_surface.obj"
+        mesh.export(obj_path)
+        print(f"  Exported     : {obj_path}")
+
+    if plot_surface:
+        slice_idx = shape[0] // 2
+        fig = plt.figure(figsize=(15, 5))
+        fig.suptitle(f"Step 3: Reconstructed Surface  |  isovalue_pct={isovalue_pct}, grid_sigma={grid_sigma}")
+
+        # Panel 1: chi field + isocontour
+        ax1 = fig.add_subplot(1, 3, 1)
+        im  = ax1.imshow(chi[slice_idx], cmap='RdBu', origin='lower')
+        ax1.contour(chi[slice_idx], levels=[isovalue], colors='yellow', linewidths=1)
+        plt.colorbar(im, ax=ax1)
+        ax1.set_title("Chi field + isocontour")
+
+        # Panel 2: ridge pts vs mesh cross-section
+        # grid is (Z,Y,X) → marching cubes verts are (x, y, z)
+        # imshow slice[z] shows (row=y, col=x) with origin='lower'
+        # → scatter(x, y) = scatter(verts[:,0], verts[:,1]), filter by verts[:,2] ≈ slice_idx
+        ax2 = fig.add_subplot(1, 3, 2)
+        ax2.imshow(smoothed[slice_idx], cmap='gray', origin='lower')
+        y_c, x_c = np.where(cleaned_mask[slice_idx])
+        ax2.scatter(x_c, y_c, color='lime', s=1, label='Ridge pts')
+        near = np.abs(verts[:, 2] - slice_idx) < 1.0
+        if near.sum() > 0:
+            ax2.scatter(verts[near, 0], verts[near, 1],
+                        color='red', s=1, label='Mesh verts')
+        ax2.legend(loc='upper right', markerscale=4)
+        ax2.set_title("Ridge pts vs Mesh (slice)")
+
+        # Panel 3: 3D vertex scatter preview
+        ax3        = fig.add_subplot(1, 3, 3, projection='3d')
+        n_preview  = min(3000, len(verts))
+        sample_idx = np.random.choice(len(verts), n_preview, replace=False)
+        sv         = verts[sample_idx]
+        ax3.scatter(sv[:, 0], sv[:, 1], sv[:, 2],
+                    s=0.3, c=sv[:, 2], cmap='viridis', alpha=0.5)
+        ax3.set_title(f"3D Mesh Preview\n({len(verts)} verts, {len(faces)} faces)")
+        ax3.set_xlabel("X"); ax3.set_ylabel("Y"); ax3.set_zlabel("Z")
+
+        plt.tight_layout()
+        plt.savefig(f"{field}_surface.png", dpi=150)
+        plt.show()
+        print(f"  Saved        : {field}_surface.png")
+
+    return SurfaceData(vertices=verts, faces=faces)
+```
+
+## File: Backend/grid_to_vdb.py
+
+- Extension: .py
+- Language: python
+- Size: 4680 bytes
+- Created: 2026-06-04 00:07:38
+- Modified: 2026-06-04 00:07:38
+
+### Code
+
+```python
+import numpy as np
+import pyopenvdb as vdb
+from .volume_data import FieldHierarchy, GridLevel, GridBlock
+
+def convert_vdb(
+    grid_data: GridBlock,
+    field: str = "density",
+    scale: float = 1.0,
+    file_path: str = None,
+    log: bool = True
+):
+    density_grid = np.array(grid_data.fields[field].astype(np.float32))  # Ensure data is in float32 format for VDB
+    
+    if log:
+        density_grid = np.log10(np.clip(density_grid, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+    
+    dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
+    dx, dy, dz = (np.array(grid_data.right_edge) -np.array(grid_data.left_edge)) / dim
+    (x_min, y_min, z_min) = np.array(grid_data.left_edge)
+    
+    print(f"Block {grid_data.block_id}: dx={dx:.4f}, dy={dy:.4f}, dz={dz:.4f}, x_min={x_min:.4f}, y_min={y_min:.4f}, z_min={z_min:.4f}")
+
+    
+    density = vdb.FloatGrid()
+    density.gridClass = vdb.GridClass.FOG_VOLUME
+    density.name = 'density'
+  
+    matrix = np.array([
+        [scale * dx, 0.0, 0.0, 0],
+        [0.0, scale * dy, 0.0, 0],
+        [0.0, 0.0, scale * dz, 0],
+        [x_min*scale, y_min*scale, z_min*scale, 1.0]
+    ], dtype=np.float64)
+
+    # Create transform from matrix
+    density.transform = vdb.createLinearTransform(matrix)
+    density.copyFromArray(density_grid)
+
+    # 4. Export to VDB file
+    if file_path is not None:
+        file_name = f"{file_path}.vdb"
+    else:
+        file_name = f"Block_{grid_data.block_id}.vdb"
+        
+    vdb.write(file_name, grids=[density])
+    
+## One vdb with all grids for each frame
+def volume_to_vdb(
+    hierarchy: FieldHierarchy,
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0,
+    log: bool = True
+):
+
+    grids_to_save = []
+
+    for level_id, level in hierarchy.levels.items():
+        
+        for block_data in level.blocks:
+            
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
+                continue
+            
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
+            density_grid = block_data.fields[field]
+    
+            dim = np.array(block_data.dims) - np.array([1, 1, 1])  
+            dx, dy, dz = (block_data.right_edge - block_data.left_edge) / dim
+            (x_min, y_min, z_min) = block_data.left_edge
+            
+            density = vdb.FloatGrid()
+            density.gridClass = vdb.GridClass.FOG_VOLUME
+            density.name = f'density_l{level_id}_b{block_data.block_id}'       
+    
+            matrix = np.array([
+                [scale * dx, 0.0, 0.0, 0],
+                [0.0, scale * dy, 0.0, 0],
+                [0.0, 0.0, scale * dz, 0],
+                [x_min*scale, y_min*scale, z_min*scale, 1.0]
+            ], dtype=np.float64)
+
+            # Create transform from matrix
+            density.transform = vdb.createLinearTransform(matrix)
+            density.copyFromArray(density_grid)
+            
+            grids_to_save.append(density)
+            
+    file_name = f"{file_name_prefix}.vdb"
+    vdb.write(file_name, grids=grids_to_save)
+
+## Multiple VDBs for each frame
+def volume_to_multiple_vdbs(
+    hierarchy: FieldHierarchy,
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0,
+    log: bool = True
+):
+    
+    if log:
+        print("Applying log scale to the data.")
+    
+    global_min = float('inf')
+    global_max = float('-inf')
+    
+    for level_id, level in hierarchy.levels.items():
+        for block_data in level.blocks:
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
+                continue
+            
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
+            global_min = min(global_min, block_data.fields[field].min())
+            global_max = max(global_max, block_data.fields[field].max())
+            
+            file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}"
+            convert_vdb(block_data, field=field, scale=scale, file_path=file_name, log=False)
+    
+    print(f"GLOBAL RANGE: Min: {global_min:.4f}, Max: {global_max:.4f}")
+    print(f"Finished exporting {len(hierarchy.levels)} levels with a total of {sum(len(level.blocks) for level in hierarchy.levels.values())} blocks to VDB files.")
+    
+    
+```
+
+## File: Backend/save_load_npz.py
+
+- Extension: .py
+- Language: python
+- Size: 12840 bytes
+- Created: 2026-06-01 18:06:38
+- Modified: 2026-06-01 18:06:38
+
+### Code
+
+```python
+## Import data from npz file to DataStructure
+## Python 3.8 compatible rewrite
+
+from .particle_data import SPHParticleData, SPHFields
+from .volume_data import GridBlock, GridLevel, FieldHierarchy
+from .surface_data import SurfaceData
+import numpy as np
+import json
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers — all dict/str metadata is stored as JSON-encoded bytes
+# to avoid relying on numpy pickle, which is unreliable in Python 3.8 / older
+# NumPy versions.
+# ---------------------------------------------------------------------------
+
+def _to_json_bytes(obj) -> np.ndarray:
+    """Serialise a Python object to a 0-d numpy bytes array via JSON."""
+    return np.bytes_(json.dumps(obj))
+
+
+def _from_json_bytes(arr) -> object:
+    """Deserialise a 0-d numpy bytes array that was written by _to_json_bytes."""
+    # arr may be a 0-d ndarray wrapping a bytes_ scalar, or a plain bytes_
+    raw = arr.flat[0] if isinstance(arr, np.ndarray) else arr
+    # raw is np.bytes_ or plain bytes — both work with bytes()
+    return json.loads(bytes(raw))
+
+
+def _units_to_json(units_dict) -> np.ndarray:
+    """
+    Convert a units dict whose values may be yt unit objects (not JSON-
+    serialisable) to a JSON-safe dict of strings, then encode as bytes.
+    """
+    safe = {k: str(v) for k, v in units_dict.items()}
+    return _to_json_bytes(safe)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def save(file_path: str, data: dict):
+    """
+    Save FieldHierarchy, SPHParticleData, and SurfaceData into a single NPZ
+    file.
+
+    Parameters
+    ----------
+    file_path : str
+        Output path (the .npz extension is added automatically by numpy if
+        not already present).
+    data : dict
+        Keys are object names, values are a single instance *or* a list of
+        instances (one per animation frame).  Each list may only contain one
+        type: FieldHierarchy, SPHParticleData, or SurfaceData.
+
+    Example
+    -------
+    save("scene.npz", {
+        "Planet_Surface": [SurfaceData, ...],
+        "Emission_Gas":   [FieldHierarchy, ...],
+        "Dust":           [SPHParticleData, ...],
+    })
+    """
+    npz_dict = {}
+    object_registry = {}  # built up as we go
+
+    for obj_name, frame_datas in data.items():
+        if not isinstance(frame_datas, list):
+            frame_datas = [frame_datas]
+
+        object_registry[obj_name] = {"Type": None, "Frames": len(frame_datas)}
+
+        for frame_idx, item in enumerate(frame_datas):
+            prefix = f"{obj_name}_{frame_idx}"
+
+            # ----------------------------------------------------------------
+            # FieldHierarchy
+            # ----------------------------------------------------------------
+            if isinstance(item, FieldHierarchy):
+                object_registry[obj_name]["Type"] = "Volume"
+
+                # Serialise unit dicts as JSON bytes (no pickle dependency)
+                npz_dict[f"{prefix}_fh_unit"] = _units_to_json(item.unit)
+                npz_dict[f"{prefix}_fh_field_units"] = _units_to_json(item.field_units)
+
+                for level_id, gridlevel in item.levels.items():
+                    npz_dict[f"{prefix}_level_{level_id}_cell_size"] = np.array(
+                        gridlevel.cell_size, dtype=np.float64
+                    )
+                    for block in gridlevel.blocks:
+                        blk_id = block.block_id
+                        base = f"{prefix}_level_{level_id}_block_{blk_id}"
+                        npz_dict[f"{base}_left_edge"] = np.array(
+                            block.left_edge, dtype=np.float64
+                        )
+                        npz_dict[f"{base}_right_edge"] = np.array(
+                            block.right_edge, dtype=np.float64
+                        )
+                        npz_dict[f"{base}_dims"] = np.array(
+                            block.dims, dtype=np.int64
+                        )
+                        for field_name, arr in block.fields.items():
+                            npz_dict[f"{base}_field_{field_name}"] = arr
+
+            # ----------------------------------------------------------------
+            # SPHParticleData
+            # ----------------------------------------------------------------
+            elif isinstance(item, SPHParticleData):
+                object_registry[obj_name]["Type"] = "Particles"
+
+                npz_dict[f"{prefix}_particle_coordinates"] = item.coordinates
+                npz_dict[f"{prefix}_particle_masses"] = item.masses
+                npz_dict[f"{prefix}_particle_densities"] = item.densities
+                npz_dict[f"{prefix}_particle_smoothing_lengths"] = item.smoothing_lengths
+                npz_dict[f"{prefix}_particle_time"] = np.array([item.time], dtype=np.float64)
+                # Store units dict as JSON bytes
+                npz_dict[f"{prefix}_particle_units"] = _units_to_json(item.units)
+                npz_dict[f"{prefix}_particle_boxsize"] = (
+                    np.array(item.boxsize, dtype=np.float64)
+                    if item.boxsize is not None
+                    else np.zeros(3, dtype=np.float64)
+                )
+                for field_name, arr in item.fields.items():
+                    npz_dict[f"{prefix}_particle_field_{field_name}"] = arr
+
+            # ----------------------------------------------------------------
+            # SurfaceData
+            # ----------------------------------------------------------------
+            elif isinstance(item, SurfaceData):
+                object_registry[obj_name]["Type"] = "Surface"
+
+                npz_dict[f"{prefix}_surface_vertices"] = item.vertices
+                npz_dict[f"{prefix}_surface_faces"] = item.faces
+                if item.normals is not None:
+                    npz_dict[f"{prefix}_surface_normals"] = item.normals
+
+    # Store the registry as JSON bytes — no pickle needed
+    npz_dict["Object_registry"] = _to_json_bytes(object_registry)
+
+    np.savez(file_path, **npz_dict)
+    print(f"Saved to {file_path}")
+
+
+# ---------------------------------------------------------------------------
+
+def load(file_path: str) -> dict:
+    """
+    Load FieldHierarchy, SPHParticleData, and SurfaceData from an NPZ file
+    produced by :func:`save`.
+
+    Returns
+    -------
+    dict
+        {
+            "Particles": {object_name: [SPHParticleData, ...]},
+            "Volume":    {object_name: [FieldHierarchy,  ...]},
+            "Surface":   {object_name: [SurfaceData,     ...]},
+        }
+    """
+    # allow_pickle=False is safe here because we no longer store raw dicts
+    npz = np.load(file_path, allow_pickle=False)
+
+    object_registry = _from_json_bytes(npz["Object_registry"])
+
+    result = {
+        "Particles": {},
+        "Volume": {},
+        "Surface": {},
+    }
+
+    # Partition names by type for clarity
+    by_type = {"Particles": {}, "Volume": {}, "Surface": {}}
+    for obj_name, meta in object_registry.items():
+        by_type[meta["Type"]][obj_name] = meta["Frames"]
+
+    # ----------------------------------------------------------------
+    # Load FieldHierarchy objects
+    # ----------------------------------------------------------------
+    for name, num_frames in by_type["Volume"].items():
+        result["Volume"][name] = []
+
+        for i in range(num_frames):
+            prefix = f"{name}_{i}"
+
+            unit = _from_json_bytes(npz[f"{prefix}_fh_unit"])
+            field_units = _from_json_bytes(npz[f"{prefix}_fh_field_units"])
+            fh = FieldHierarchy(unit=unit, field_units=field_units)
+
+            # Collect all keys that belong to this prefix/frame
+            prefix_level = f"{prefix}_level_"
+            temp_levels = {}  # level_id -> {"cell_size": ..., "blocks": {blk_id: {...}}}
+
+            for k in npz.files:
+                if not k.startswith(prefix_level):
+                    continue
+
+                # Strip the common prefix so we parse the structural part only
+                key_core = k[len(prefix_level):]
+                # key_core examples:
+                #   "0_cell_size"
+                #   "0_block_3_left_edge"
+                #   "0_block_3_field_density"
+                parts = key_core.split("_")
+                level_id = int(parts[0])
+
+                if level_id not in temp_levels:
+                    temp_levels[level_id] = {"cell_size": None, "blocks": {}}
+
+                remainder = "_".join(parts[1:])  # everything after the level id
+
+                if remainder == "cell_size":
+                    temp_levels[level_id]["cell_size"] = tuple(npz[k].tolist())
+                    continue
+
+                if not remainder.startswith("block_"):
+                    continue  # unexpected key shape — skip safely
+
+                # remainder = "block_3_left_edge" or "block_3_field_density"
+                block_parts = remainder.split("_")
+                # block_parts[0] == "block", block_parts[1] == block_id
+                blk_id = int(block_parts[1])
+                attr = "_".join(block_parts[2:])  # "left_edge", "right_edge", "dims", "field_density" …
+
+                if blk_id not in temp_levels[level_id]["blocks"]:
+                    temp_levels[level_id]["blocks"][blk_id] = {"fields": {}}
+
+                blk_dict = temp_levels[level_id]["blocks"][blk_id]
+
+                if attr == "left_edge":
+                    blk_dict["left_edge"] = tuple(npz[k].tolist())
+                elif attr == "right_edge":
+                    blk_dict["right_edge"] = tuple(npz[k].tolist())
+                elif attr == "dims":
+                    blk_dict["dims"] = tuple(int(x) for x in npz[k].tolist())
+                elif attr.startswith("field_"):
+                    field_name = attr[len("field_"):]
+                    blk_dict["fields"][field_name] = npz[k]
+
+            # Reconstruct levels and blocks in sorted order
+            for level_id in sorted(temp_levels.keys()):
+                level_data = temp_levels[level_id]
+                fh.levels[level_id] = GridLevel(
+                    level=level_id, cell_size=level_data["cell_size"]
+                )
+                for blk_id in sorted(level_data["blocks"].keys()):
+                    bd = level_data["blocks"][blk_id]
+                    block = GridBlock(
+                        block_id=blk_id,
+                        left_edge=bd["left_edge"],
+                        right_edge=bd["right_edge"],
+                        dims=bd["dims"],
+                        fields=bd["fields"],
+                    )
+                    fh.levels[level_id].blocks.append(block)
+
+            result["Volume"][name].append(fh)
+
+    # ----------------------------------------------------------------
+    # Load SPHParticleData objects
+    # ----------------------------------------------------------------
+    for name, num_frames in by_type["Particles"].items():
+        result["Particles"][name] = []
+
+        for i in range(num_frames):
+            prefix = f"{name}_{i}"
+            prefix_field = f"{prefix}_particle_field_"
+
+            fields_dict = {}
+            for k in npz.files:
+                if k.startswith(prefix_field):
+                    fname = k[len(prefix_field):]
+                    fields_dict[fname] = npz[k]
+
+            boxsize_arr = npz[f"{prefix}_particle_boxsize"]
+            boxsize = tuple(boxsize_arr.tolist()) if not np.all(boxsize_arr == 0) else None
+
+            particle_data = SPHParticleData(
+                coordinates=npz[f"{prefix}_particle_coordinates"],
+                masses=npz[f"{prefix}_particle_masses"],
+                densities=npz[f"{prefix}_particle_densities"],
+                smoothing_lengths=npz[f"{prefix}_particle_smoothing_lengths"],
+                time=float(npz[f"{prefix}_particle_time"][0]),
+                fields=SPHFields(data=fields_dict),
+                units=_from_json_bytes(npz[f"{prefix}_particle_units"]),
+                boxsize=boxsize,
+            )
+            result["Particles"][name].append(particle_data)
+
+    # ----------------------------------------------------------------
+    # Load SurfaceData objects
+    # ----------------------------------------------------------------
+    for name, num_frames in by_type["Surface"].items():
+        result["Surface"][name] = []
+
+        for i in range(num_frames):
+            prefix = f"{name}_{i}"
+            normals_key = f"{prefix}_surface_normals"
+            surface = SurfaceData(
+                vertices=npz[f"{prefix}_surface_vertices"],
+                faces=npz[f"{prefix}_surface_faces"],
+                normals=npz[normals_key] if normals_key in npz.files else None,
+            )
+            result["Surface"][name].append(surface)
+
+    return result
+```
+
+## File: Blender_Import/high_level_import.py
+
+- Extension: .py
+- Language: python
+- Size: 3546 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+from .mesh_animation import setup_mesh_animation
+from ..Backend.particle_data import load_particles
+from ..Backend.save_load_npz import load
+import glob
+import os
+import bpy
+import yt
+
+def resolve_file_paths(file_paths, folder_path, pattern, max_files):
+    if folder_path is not None and pattern is not None:
+        file_paths = sorted(glob.glob(os.path.join(folder_path, pattern)))
+    elif folder_path is not None and pattern is None:
+        file_paths = sorted(glob.glob(os.path.join(folder_path, "*")))
+    elif file_paths is not None:
+        if isinstance(file_paths, str):
+            file_paths = [file_paths]
+    else:
+        raise ValueError("Either input file paths or folder_path + pattern or folder_path alone.")
+      
+    if not file_paths:
+        raise ValueError("No files found with the given input")
+    
+    if max_files is not None:
+        file_paths = file_paths[:max_files]
+    
+    return file_paths
+
+def load_particles_into_blender(
+    ptype: str,
+    fields=None, 
+    region=None,
+    
+    object_name: str = 'Star',
+    file_paths: str = None,
+    folder_path: str = None,
+    pattern: str = None,
+    max_files: int = None,
+    
+    obj: bpy.types.Object = None,
+    position_scale=1.0,
+    center=True
+    ):
+    """
+    A high level function to load particle data from yt datasets and create animated particle object in Blender.
+    Parameters
+    ----------
+    ptype : str
+        Particle type name (e.g., 'stars', 'dark_matter', 'PartType0')
+    fields : list of str
+        Fields to extract (e.g., ['mass', 'temperature'])
+    region : yt object or None
+        A region (sphere, box) to subset particles
+    object_name : str
+        Name of the Blender object to create
+    file_paths : list of str or str or None
+        List of yt dataset file paths to load
+    folder_path : str or None  
+        Folder path to search for dataset files
+    pattern : str or None
+        Filename pattern to match within folder_path (e.g., "*.h5")
+    max_files : int or None
+        Maximum number of files to load
+    obj : bpy.types.Object or None
+        Existing Blender object to use for particle mesh
+    position_scale : float
+        Scale factor for particle positions
+    center : bool
+        Whether to subtract center-of-mass per frame
+    
+    Returns
+    -------
+    frames_data : list of dict
+        List of particle data per frame, each as output of particle_data:
+        particle_data = dict
+        {
+            "positions": np.ndarray (N,3),
+            "fields": {field_name: np.ndarray},
+            "time": dataset time in code units
+            "units": {"length": (numerical value, unit), "mass": ..., "time": ...}
+        }
+    """
+
+    file_paths = resolve_file_paths(file_paths, folder_path, pattern, max_files)
+    
+    frames_data = []
+    for fpath in file_paths:
+        data = yt.load(fpath)
+        frames_data.append(load_particles(data, ptype=ptype, fields = fields, region=region))
+        
+    setup_mesh_animation(frames_data = frames_data, object_name = object_name, obj= obj, position_scale = position_scale, center = center)
+    
+    return frames_data
+
+def load_npz_into_blender(
+    file_path: str,
+    position_scale=1.0,
+    center = True
+):
+    data = load(file_path)
+    for obj_name, frames_data in {**data["Particles"], **data["Surface"]}.items():
+        setup_mesh_animation(frames_data=frames_data, object_name=obj_name, position_scale=position_scale, center=center)
+    for obj_name, frames_data in data["Volume"].items():
+        continue 
+    
+
+
+        
+```
+
+## File: Blender_Import/volume_animation.py
+
+- Extension: .py
+- Language: python
+- Size: 3016 bytes
+- Created: 2026-05-28 13:13:16
+- Modified: 2026-05-28 13:13:16
+
+### Code
+
+```python
+import os
+import bpy
+from ..Blender_Effect.object import set_object_shader
+
+def setup_volume_animation(
+    vdb_folder: str, 
+    material: bpy.types.Material | None = None,
+    multi_vdb_per_frame: bool = False,
+):
+    """
+    Sets up volume animation in Blender by importing VDB files per frame and controlling their visibility.
+    """
+             
+    frame_to_filepaths = {}
+
+    ## Construct frame to filepaths mapping
+    if multi_vdb_per_frame:
+        subfolders = sorted([d for d in os.listdir(vdb_folder) 
+                             if os.path.isdir(os.path.join(vdb_folder, d)) and d.startswith("frame_")])
+        
+        for frame_num, subfolder in enumerate(subfolders):
+            current_frame_folder = os.path.join(vdb_folder, subfolder)
+            vdb_files = sorted([f for f in os.listdir(current_frame_folder) if f.endswith(".vdb")])
+            
+            if vdb_files:
+                frame_to_filepaths[frame_num] = [os.path.join(current_frame_folder, f) for f in vdb_files]
+    else:
+        vdb_files = sorted([f for f in os.listdir(vdb_folder) if f.endswith(".vdb")])
+        for frame_num, vdb_file in enumerate(vdb_files):
+            frame_to_filepaths[frame_num] = [os.path.join(vdb_folder, vdb_file)]
+
+    if not frame_to_filepaths:
+        print("Warning: No valid VDB sequence data detected. Exiting.")
+        return
+
+    for frame_num, filepaths in sorted(frame_to_filepaths.items()):
+        print(f"Processing Frame {frame_num:03d}: Importing {len(filepaths)} VDB partitions...")
+        
+        ## Create collection for this frame
+        col = bpy.data.collections.new(f"frame_{frame_num:03d}")
+        bpy.context.scene.collection.children.link(col)
+        
+        ## Import VDB files for this frame
+        for filepath in filepaths:
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            vol_data = bpy.data.volumes.new(name=filename)
+            vol_data.filepath = filepath
+            obj = bpy.data.objects.new(filename, vol_data)
+            set_object_shader(obj, material)   
+                     
+            if obj.name in bpy.context.scene.collection.objects:
+                bpy.context.scene.collection.objects.unlink(obj)
+            col.objects.link(obj)
+
+        ## Visibiltiy Control for the frame
+        for obj in col.objects:
+            obj.hide_viewport = True
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_viewport", frame=0)
+            obj.keyframe_insert(data_path="hide_render", frame=0)
+            
+            obj.hide_viewport = False
+            obj.hide_render = False
+            obj.keyframe_insert(data_path="hide_viewport", frame=frame_num)
+            obj.keyframe_insert(data_path="hide_render", frame=frame_num)
+            
+            obj.hide_viewport = True
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_viewport", frame=frame_num + 1)
+            obj.keyframe_insert(data_path="hide_render", frame=frame_num + 1)
+
+
+
+```
+
+## File: Blender_Import/__init__.py
+
+- Extension: .py
+- Language: python
+- Size: 0 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+
+```
+
+## File: Blender_Import/mesh_animation.py
+
+- Extension: .py
+- Language: python
+- Size: 4434 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:43
+
+### Code
+
+```python
+from ..Blender_Effect.object import create_object
+from ..Backend.particle_data import SPHParticleData
+from ..Backend.surface_data import SurfaceData
+
+import numpy as np
+import bpy
+
+
+""" Animate mesh from preloaded particle/ surface data.
+Parameters:
+----------
+    
+frame_data : list of dict
+    List of particle/ surface data per frame, each as output of load_particles() or grid_to_surface()
+object_name : str
+    Name of the Blender object to create. Duplicate names will be overwritten.
+obj : bpy.types.Object or None
+    Existing Blender object to use for mesh, or None to create new one
+position_scale : float
+    Scale factor for particle positions or surface vertices
+center : bool
+    Whether to subtract center-of-mass per frame
+"""
+
+## Helper functions for mesh animation
+    
+def remove_existing_handler(obj_name):
+    handlers = bpy.app.handlers.frame_change_post
+    to_remove = []
+
+    for h in handlers:
+        if hasattr(h, "_object_name") and h._object_name == obj_name:
+            to_remove.append(h)
+
+    for h in to_remove:
+        handlers.remove(h)
+
+def particle_frame_update(frame, mesh, position_scale=1.0, center=True):
+    """
+    Update particle mesh per frame.
+    frame : SPHParticleData
+    """
+    num_particles = frame.coordinates.shape[0]
+
+    # Ensure vertices exist
+    if len(mesh.vertices) != num_particles:
+        mesh.clear_geometry()
+        mesh.from_pydata([(0.0, 0.0, 0.0)] * num_particles, [], [])
+        mesh.update()
+
+    # Create attributes if missing
+    for name in frame.fields.keys():
+        if name not in mesh.attributes:
+            mesh.attributes.new(name=name, type='FLOAT', domain='POINT')
+
+    # Update vertex positions
+    pos = frame.coordinates.astype(np.float32) * position_scale
+    if center:
+        pos -= pos.mean(axis=0)
+    mesh.vertices.foreach_set("co", pos.ravel())
+
+    # Update attributes
+    for name, values in frame.fields.items():
+        mesh.attributes[name].data.foreach_set("value", np.ravel(values, order='C'))
+
+    mesh.update()
+    
+def surface_frame_update(frame, mesh, position_scale=1.0, center=True):
+    """
+    Update surface mesh per frame.
+    frame : dict with keys 'vertices' and 'faces'
+    """
+    verts = np.array(frame.vertices, dtype=np.float32) * position_scale
+    if center:
+        verts -= verts.mean(axis=0)
+
+    mesh.clear_geometry()
+    mesh.from_pydata(verts.tolist(), [], frame.faces.tolist())
+    mesh.update()
+
+## Main Function
+def setup_mesh_animation(
+    frames_data,
+    object_name: str,
+    obj: bpy.types.Object = None,
+    position_scale=1.0,
+    center=True
+):
+    """
+    Generic mesh animation setup for Blender.
+
+    Parameters
+    ----------
+    frames_data : list
+        List of SPHParticleData or SurfaceData per frame.
+    object_name : str
+        Name of the Blender object.
+    frame_update_fn : callable
+        Function to update mesh each frame. Signature: (mesh, frame, index) -> None
+    obj : bpy.types.Object or None
+        Existing object or None to create new.
+    position_scale : float
+        Scale factor for positions.
+    center : bool
+        Whether to center vertices/particles per frame.
+    """
+    if isinstance(frames_data, SPHParticleData) or isinstance(frames_data, SurfaceData):
+        frames_data = [frames_data]
+
+    num_frames = len(frames_data)
+
+    # Resolve or create object
+    if obj is None:
+        obj = create_object(object_name)
+
+    mesh = obj.data
+
+    # Set scene frame range
+    scene = bpy.context.scene
+    scene.frame_start = 0
+    scene.frame_end = num_frames - 1
+
+    # Inner handler function
+    def handler(scene):
+        f = scene.frame_current
+        if f < 0 or f >= num_frames:
+            return
+
+        frame = frames_data[f]
+        
+        if isinstance(frame, SPHParticleData):
+            particle_frame_update(frame, mesh, position_scale, center)
+        
+        elif isinstance(frame, SurfaceData):
+            surface_frame_update(frame, mesh, position_scale, center)
+
+        # Tag handler for removal
+        handler._object_name = obj.name
+
+    # Remove any old handlers for this object
+    remove_existing_handler(obj.name)
+    bpy.app.handlers.frame_change_post.append(handler)
+
+    # Link object to collection if not already
+    if bpy.context.collection not in obj.users_collection:
+        bpy.context.collection.objects.link(obj)
+
+    print(f"{object_name} animation registered ({num_frames} frames).")
+    return obj
+```
+
+## File: Blender_Effect/object.py
+
+- Extension: .py
+- Language: python
+- Size: 4384 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-21 02:44:47
+
+### Code
+
+```python
+import bpy
+'''
+Utilities for managing Blender objects, shading and modifiers.
+'''
+
+
+def duplicate_object(original_obj, new_name):
+    """
+    Duplicate object data. Remove existing object if name collide.
+    """
+    new_obj = bpy.data.objects.get(new_name)
+    if new_obj is not None:
+        bpy.data.objects.remove(new_obj)
+
+    new_obj = bpy.data.objects.new(new_name, original_obj.data)  
+    bpy.context.collection.objects.link(new_obj)             
+    return new_obj
+
+
+def resolve_object(obj):
+    if isinstance(obj, bpy.types.Object):
+        return obj
+    
+    elif isinstance(obj, str):
+        obj_ref = bpy.data.objects.get(obj)
+        
+        if not obj_ref:
+            raise ValueError(f"Object named '{obj}' not found in the scene.")
+            
+        return obj_ref
+    else:
+        raise TypeError("obj must be bpy.types.Object or a string")
+    
+def create_object(obj_name):
+    """Create or overwrite object and link to active collection."""
+    if obj_name in bpy.data.meshes:
+        bpy.data.meshes.remove(bpy.data.meshes[obj_name])
+    if obj_name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[obj_name])
+
+    mesh = bpy.data.meshes.new(obj_name)
+    obj = bpy.data.objects.new(obj_name, mesh)
+    
+    bpy.context.collection.objects.link(obj)
+    
+    return obj
+
+def set_object_shader(obj, shader_name = None):
+    """
+    Set the shader type of an object. If shader_name is None, try to find a material containing the object's name.
+    """
+    obj = resolve_object(obj)
+
+    if shader_name is not None:
+        if isinstance(shader_name, str):
+            mat = bpy.data.materials.get(shader_name)
+            
+                
+        elif isinstance(shader_name, bpy.types.Material):
+            mat = shader_name
+            
+        else:
+            raise TypeError("shader_name must be a string or bpy.types.Material")
+        
+        if mat is None:
+                print(f"Material '{shader_name}' not found.")
+        
+    else:
+        trial = [m for m in bpy.data.materials if obj.name in m.name]
+        print(trial)
+        mat = trial[0]
+        
+        if mat is None:
+            print(f"No matching material found containing '{obj.name}'.")
+        
+    if mat is not None:
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        print(f"Set shader '{mat.name}' for object '{obj.name}'.")
+        
+
+
+def list_modifiers(obj):
+    """
+    Print all modifiers on the given object with their index in the stack.
+    
+    Args:
+        obj: The Blender object or String
+    """
+    obj = resolve_object(obj)
+
+    print(f"Modifiers on object '{obj.name}':")
+    for idx, mod in enumerate(obj.modifiers):
+        print(f"  {idx}: {mod.name} ({mod.type})")
+
+
+def delete_modifier(obj, mod_name: str):
+    """
+    Delete a modifier from an object if it exists.
+    """
+    obj = resolve_object(obj)
+
+    mod = obj.modifiers.get(mod_name)
+    if mod:
+        obj.modifiers.remove(mod)
+        print(f"Deleted modifier '{mod_name}'")
+    else:
+        print(f"Modifier '{mod_name}' not found")
+
+
+def move_modifier(obj, mod_name: str, direction: str = 'up'):
+    """
+    Move a modifier up or down.
+    """
+    obj = resolve_object(obj)
+
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+
+    if direction == 'up':
+        bpy.ops.object.modifier_move_up(modifier=mod_name)
+        print(f"Moved modifier '{mod_name}' up")
+    elif direction == 'down':
+        bpy.ops.object.modifier_move_down(modifier=mod_name)
+        print(f"Moved modifier '{mod_name}' down")
+    else:
+        raise ValueError("Direction must be 'up' or 'down'")
+
+
+def add_gn_modifer(obj, mod_name: str):
+    """
+    Add a modifier WITH gn_node group. 
+    Delete existing modifier and gn_node group with the same name.
+    """
+    obj = resolve_object(obj)
+
+    if mod_name in bpy.data.node_groups: 
+        bpy.data.node_groups.remove(bpy.data.node_groups[mod_name]) 
+
+    gn_group = bpy.data.node_groups.new(type="GeometryNodeTree", name=mod_name)
+    gn_group.description = f"mod_name"
+    gn_group.is_modifier = True
+
+    if mod_name in bpy.data.objects[obj.name].modifiers:
+        bpy.data.objects[obj.name].modifiers.remove(bpy.data.objects[obj.name].modifiers[mod_name])
+    gn_mod = obj.modifiers.new(mod_name, 'NODES')
+    gn_mod.node_group = gn_group
+    
+    return gn_mod, gn_group
+
+```
+
+## File: Blender_Effect/node.py
+
+- Extension: .py
+- Language: python
+- Size: 11965 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:43
+
+### Code
+
+```python
+import bpy
+import typing
+
+from .object import (
+    resolve_object,
+    duplicate_object,
+    add_gn_modifer
+)
+
+def sph_point_to_volume(obj: typing.Union[str, bpy.types.Object],
+                        attribute_name: str | None = None,
+                        material_name: str | None = None,
+                        voxel_size: float = 0.02,
+                        density: float = 0.2,
+                        math_multiplier: float = 0.03):
+
+    obj = resolve_object(obj)
+    species_name = obj.name
+    group_name = species_name + "_volnode"
+      
+    if material_name is None:   
+        material_name = species_name + "_volshader"  
+        
+    gn_mod, sph_group = add_gn_modifer(obj, group_name) 
+
+    # Interface
+    geometry_socket = sph_group.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    geometry_socket.attribute_domain = 'POINT'
+
+    geometry_socket_1 = sph_group.interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    geometry_socket_1.attribute_domain = 'POINT'
+
+    # Nodes
+    group_input = sph_group.nodes.new("NodeGroupInput")
+    group_input.name = "Group Input"
+
+    group_output = sph_group.nodes.new("NodeGroupOutput")
+    group_output.name = "Group Output"
+    group_output.is_active_output = True
+
+    points_to_volume = sph_group.nodes.new("GeometryNodePointsToVolume")
+    points_to_volume.resolution_mode = 'VOXEL_SIZE'
+    points_to_volume.inputs[1].default_value = density  # Density
+    points_to_volume.inputs[2].default_value = voxel_size  # Voxel Size
+
+    set_material = sph_group.nodes.new("GeometryNodeSetMaterial")
+    set_material.name = "Set Material"
+    set_material.inputs[1].default_value = True  # Selection
+    
+    if material_name in bpy.data.materials:
+        set_material.inputs[2].default_value = bpy.data.materials[material_name]
+    else:
+        raise ValueError(f"Material '{material_name}' not found in bpy.data.materials.")
+
+
+    # Set locations
+    sph_group.nodes["Group Input"].location = (-350.0, 50.0)
+    sph_group.nodes["Group Output"].location = (450.0, 100.0)
+    sph_group.nodes["Points to Volume"].location = (-100.0, 100.0)
+    sph_group.nodes["Set Material"].location = (200.0, 100.0)
+
+    # Links
+    sph_group.links.new(sph_group.nodes["Group Input"].outputs[0], sph_group.nodes["Points to Volume"].inputs[0])
+    sph_group.links.new(sph_group.nodes["Set Material"].outputs[0], sph_group.nodes["Group Output"].inputs[0])
+    sph_group.links.new(sph_group.nodes["Points to Volume"].outputs[0], sph_group.nodes["Set Material"].inputs[0])
+
+    if attribute_name is not None:
+        named_attr_radius = sph_group.nodes.new("GeometryNodeInputNamedAttribute")
+        named_attr_radius.name = "Radius Attribute"
+        named_attr_radius.data_type = 'FLOAT'
+        named_attr_radius.inputs[0].default_value = attribute_name  # Name
+
+        math_radius = sph_group.nodes.new("ShaderNodeMath")
+        math_radius.name = "Math Radius"
+        math_radius.operation = 'MULTIPLY'
+        math_radius.use_clamp = False
+        math_radius.inputs[1].default_value = math_multiplier
+
+        sph_group.links.new(named_attr_radius.outputs[0], math_radius.inputs[0])
+        sph_group.links.new(math_radius.outputs[0], points_to_volume.inputs[4])
+
+        named_attr_radius.location = (-500.0, -100.0)
+        math_radius.location = (-300.0, -50.0)
+    
+    
+    
+    return sph_group
+
+
+def sph_point_to_mesh(obj, 
+                      radius_attr: str = None, 
+                      material_name: str = None, 
+                      voxel_size: float = 0.3, 
+                      density: float = 1.0, 
+                      radius_multiplier: float = 1.1):
+    """ 
+    Create a modifer with GN node group that converts point to mesh with material. 
+
+    Args: 
+        group_name: Name of node group
+        radius_attr: Named attribute used for radius scaling
+        material_name: Name of material to assign
+        voxel_size: Voxel size for Points to Volume and Volume to Mesh
+        density: Density input for Points to Volume
+        radius_multiplier: Multiply radius by this factor
+
+    Returns: 
+        bpy.types.NodeTree: The created node group
+    """ 
+    obj = resolve_object(obj) 
+    species_name = obj.name 
+    group_name = species_name + '_meshnode' 
+
+
+    if material_name is None: 
+        material_name = species_name + '_meshshader' 
+
+    gn_mod, gn_group = add_gn_modifer(obj, group_name) 
+
+    # Interface 
+    geometry_socket = gn_group.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry') 
+    geometry_socket.attribute_domain = 'POINT' 
+    geometry_socket_1 = gn_group.interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry') 
+    geometry_socket_1.attribute_domain = 'POINT' 
+
+    # Nodes 
+    group_input = gn_group.nodes.new("NodeGroupInput") 
+    group_input.name = "Group Input" 
+    group_output = gn_group.nodes.new("NodeGroupOutput") 
+    group_output.name = "Group Output" 
+    group_output.is_active_output = True 
+
+    points_to_volume = gn_group.nodes.new("GeometryNodePointsToVolume") 
+    points_to_volume.name = "Points to Volume" 
+    points_to_volume.resolution_mode = 'VOXEL_SIZE' 
+    points_to_volume.inputs[1].default_value = density 
+    points_to_volume.inputs[2].default_value = voxel_size 
+
+    volume_to_mesh = gn_group.nodes.new("GeometryNodeVolumeToMesh") 
+    volume_to_mesh.name = "Volume to Mesh" 
+    volume_to_mesh.resolution_mode = 'VOXEL_SIZE' 
+    volume_to_mesh.inputs[1].default_value = voxel_size 
+    volume_to_mesh.inputs[3].default_value = 0.01 
+    volume_to_mesh.inputs[4].default_value = 0.0267 
+
+    set_shade = gn_group.nodes.new("GeometryNodeSetShadeSmooth") 
+    set_shade.name = "Set Shade Smooth" 
+    set_shade.domain = 'FACE' 
+    set_shade.inputs[1].default_value = True 
+    set_shade.inputs[2].default_value = True 
+
+    set_material = gn_group.nodes.new("GeometryNodeSetMaterial") 
+    set_material.name = "Set Material" 
+    set_material.inputs[1].default_value = True 
+    if material_name and material_name in bpy.data.materials: 
+        set_material.inputs[2].default_value = bpy.data.materials[material_name] 
+
+    # Links 
+    gn_group.links.new(group_input.outputs[0], points_to_volume.inputs[0]) 
+    gn_group.links.new(points_to_volume.outputs[0], volume_to_mesh.inputs[0]) 
+    gn_group.links.new(volume_to_mesh.outputs[0], set_shade.inputs[0]) 
+    gn_group.links.new(set_shade.outputs[0], set_material.inputs[0]) 
+    gn_group.links.new(set_material.outputs[0], group_output.inputs[0]) 
+
+    # Locations 
+    group_input.location = (-600, 0) 
+    group_output.location = (600, 0) 
+    points_to_volume.location = (-300, 0) 
+    volume_to_mesh.location = (0, 0) 
+    set_shade.location = (300, 0) 
+    set_material.location = (450, 0) 
+
+    if radius_attr is not None: 
+        named_attr = gn_group.nodes.new("GeometryNodeInputNamedAttribute") 
+        named_attr.name = "Radius Attribute" 
+        named_attr.data_type = 'FLOAT' 
+        named_attr.inputs[0].default_value = radius_attr 
+
+        math_node = gn_group.nodes.new("ShaderNodeMath") 
+        math_node.name = "Math Multiply" 
+        math_node.operation = 'MULTIPLY' 
+        math_node.inputs[1].default_value = radius_multiplier 
+
+        gn_group.links.new(named_attr.outputs[0], math_node.inputs[0]) 
+        gn_group.links.new(math_node.outputs[0], points_to_volume.inputs[4]) 
+
+        named_attr.location = (-450, -100) 
+        math_node.location = (-150, -100)
+
+
+
+def select(
+    obj,
+    new_object_name: str,
+    mode: str = "attribute",  # "attribute" or "proximity"
+    attribute_name: str = None,
+    compare_value: float = None,
+    operation: str = "GREATER",  # GREATER, LESS, EQUAL, NOT_EQUAL
+    target_obj = None,
+    target_element: str = 'POINTS',  # 'POINTS', 'EDGES', 'FACES' for mesh
+    distance: float = 1.0,
+):
+    """ 
+    Add a Geometry Nodes modifier that selects points based on attribute or proximity. 
+    """
+    obj = resolve_object(obj)
+    new_obj = duplicate_object(obj, new_object_name)
+    mod_name = new_object_name
+
+    gn_mod, gn_group = add_gn_modifer(new_obj, mod_name)
+
+    # Group Input / Output
+    group_input = gn_group.nodes.new("NodeGroupInput")
+    group_input.name = "Group Input"
+    group_output = gn_group.nodes.new("NodeGroupOutput")
+    group_output.name = "Group Output"
+
+    # Add input/output sockets
+    geo_in = gn_group.interface.new_socket(
+        name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    geo_out = gn_group.interface.new_socket(
+        name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+    # Seperate Geometry node (selection gate)
+    separate_geo = gn_group.nodes.new("GeometryNodeSeparateGeometry")
+    separate_geo.domain = 'POINT'
+
+    # Link
+    gn_group.links.new(group_input.outputs[0], separate_geo.inputs[0])
+    gn_group.links.new(separate_geo.outputs[0], group_output.inputs[0])
+
+    # --- Simple attribute selection ---
+    if mode == "attribute":
+        if attribute_name is None or compare_value is None:
+            raise ValueError("attribute_name and compare_value required for 'attribute' mode")
+
+        attr_node = gn_group.nodes.new("GeometryNodeInputNamedAttribute")
+        attr_node.name = "Attribute Input"
+        attr_node.data_type = 'FLOAT'
+        attr_node.inputs[0].default_value = attribute_name
+
+        compare_node = gn_group.nodes.new("ShaderNodeMath")
+        compare_node.name = "Compare"
+        compare_node.inputs[1].default_value = compare_value
+        op_map = {
+            "GREATER": 'GREATER_THAN',
+            "LESS": 'LESS_THAN',
+            "EQUAL": 'EQUAL',
+            "NOT_EQUAL": 'NOT_EQUAL'
+        }
+        compare_node.operation = op_map.get(operation.upper(), 'GREATER_THAN')
+
+        # Link attribute → compare → selection
+        gn_group.links.new(attr_node.outputs[0], compare_node.inputs[0])
+        gn_group.links.new(compare_node.outputs[0], separate_geo.inputs[1])
+
+        # Layout
+        group_input.location = (-400, 0)
+        attr_node.location = (-200, 0)
+        compare_node.location = (0, 0)
+        separate_geo.location = (200, 0)
+        group_output.location = (400, 0)
+
+    # --- Advanced proximity selection ---
+    elif mode == "proximity":
+        if target_obj is None:
+            raise ValueError("target_obj required for 'proximity' mode")
+        target_obj = resolve_object(target_obj)
+
+        # Object info node
+        object_info_node = gn_group.nodes.new("GeometryNodeObjectInfo")
+        object_info_node.name = "Object Info"
+        object_info_node.transform_space = 'RELATIVE'
+        object_info_node.inputs[0].default_value = target_obj
+
+        # Proximity node
+        proximity_node = gn_group.nodes.new("GeometryNodeProximity")
+        proximity_node.name = "Proximity"
+
+        if target_element not in ('POINTS', 'EDGES', 'FACES'):
+            raise ValueError("target_element must be 'POINTS', 'EDGES', 'FACES'")
+
+        proximity_node.target_element = target_element
+
+        compare_node = gn_group.nodes.new("ShaderNodeMath")
+        compare_node.name = "Distance Compare"
+        compare_node.operation = 'LESS_THAN'
+        compare_node.inputs[1].default_value = distance
+
+        # Link proximity → compare → delete
+        gn_group.links.new(object_info_node.outputs[4], proximity_node.inputs[0])
+        gn_group.links.new(proximity_node.outputs[1], compare_node.inputs[0])
+        gn_group.links.new(compare_node.outputs[0], separate_geo.inputs[1])
+
+        # Layout
+        group_input.location = (-400, 0)
+        object_info_node.location = (-400, -200)
+        proximity_node.location = (-200, -100)
+        compare_node.location = (0, -100)
+        separate_geo.location = (200, 0)
+        group_output.location = (400, 0)
+
+    else:
+        raise ValueError("mode must be 'attribute' or 'proximity'")
+
+    return new_obj
+
+
+
+
+```
+
+## File: Blender_Effect/scene.py
+
+- Extension: .py
+- Language: python
+- Size: 1241 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:43
+
+### Code
+
+```python
+import bpy
+import os
+
+class SceneManager:
+    def __init__(self, scene_name="AstroScene", export_dir="./output"):
+        self.scene_name = scene_name
+        self.export_dir = os.path.abspath(export_dir)
+        os.makedirs(self.export_dir, exist_ok=True)
+        
+        self.objects = {}  # track all objects
+        self.scene = bpy.context.scene
+        self.scene.name = scene_name
+    
+    def clear_scene(self):
+        bpy.ops.wm.read_homefile(use_empty=True)
+        self.objects = {}
+    
+    def add_object(self, obj_name, obj_data):
+
+        self.objects[obj_name] = obj_data
+        # actual Blender object creation happens here or in objects.py
+
+    def set_camera(self, location=(0,0,10), look_at=(0,0,0)):
+        cam = bpy.data.objects.get("Camera")
+        if not cam:
+            bpy.ops.object.camera_add(location=location)
+            cam = bpy.context.object
+        cam.location = location
+        cam.rotation_euler = (0,0,0)  # optionally compute proper rotation
+        self.scene.camera = cam
+
+    def set_light(self, location=(0,0,10)):
+        bpy.ops.object.light_add(type='SUN', location=location)
+
+    def get_export_path(self, filename="output.png"):
+        return os.path.join(self.export_dir, filename)
+
+```
+
+## File: Blender_Effect/__init__.py
+
+- Extension: .py
+- Language: python
+- Size: 0 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:25:42
+
+### Code
+
+```python
+
+```
+
+## File: Blender_Effect/shading.py
+
+- Extension: .py
+- Language: python
+- Size: 14226 bytes
+- Created: 2026-06-12 17:45:21
+- Modified: 2026-06-12 17:45:21
+
+### Code
+
+```python
+import bpy
+import colorsys
+import typing
+import numpy as np
+
+## Node creation helpers
+
+def _add_output_node(
+    nt: bpy.types.NodeTree,
+    location: tuple = (400, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeOutputMaterial")
+    node.location = location
+    return node
+
+
+def _add_volume_principled(
+    nt: bpy.types.NodeTree,
+    density: float = 0.0,
+    location: tuple = (100, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeVolumePrincipled")
+    node.location = location
+    node.inputs["Density"].default_value = density
+    return node
+
+
+def _add_attr_node(
+    nt: bpy.types.NodeTree,
+    attribute_name: str,
+    location: tuple = (-400, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeAttribute")
+    node.attribute_name = attribute_name
+    node.location = location
+    return node
+
+
+def _add_map_range(
+    nt: bpy.types.NodeTree,
+    from_min: float = 0.0,
+    from_max: float = 1.0,
+    to_min: float = 0.0,
+    to_max: float = 1.0,
+    clamp: bool = True,
+    location: tuple = (-550, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeMapRange")
+    node.location = location
+    node.clamp = clamp
+    node.inputs["From Min"].default_value = from_min
+    node.inputs["From Max"].default_value = from_max
+    node.inputs["To Min"].default_value = to_min
+    node.inputs["To Max"].default_value = to_max
+    return node
+
+
+def _add_color_ramp(
+    nt: bpy.types.NodeTree,
+    stops: typing.List[typing.Tuple],
+    interpolation: str = "LINEAR",
+    location: tuple = (-200, 200),
+) -> bpy.types.Node:
+    """
+    Create a ColorRamp node from a list of stops.
+
+    Args:
+        stops: list of (position, R, G, B, A) tuples, at least 2 entries.
+               Use `sample_matplotlib_cmap` to build this.
+        interpolation: ColorRamp interpolation mode.
+
+    Returns:
+        The ColorRamp node.
+    """
+    node = nt.nodes.new("ShaderNodeValToRGB")
+    node.location = location
+    node.color_ramp.interpolation = interpolation
+
+    # Remove all but the first element (Blender always keeps at least one)
+    while len(node.color_ramp.elements) > 1:
+        node.color_ramp.elements.remove(node.color_ramp.elements[1])
+
+    # Set the first stop
+    node.color_ramp.elements[0].position = stops[0][0]
+    node.color_ramp.elements[0].color = stops[0][1:]
+
+    # Add remaining stops
+    for pos, r, g, b, a in stops[1:]:
+        el = node.color_ramp.elements.new(pos)
+        el.color = (r, g, b, a)
+
+    return node
+
+
+def _add_emission_math(
+    nt: bpy.types.NodeTree,
+    multiplier: float = 0.1,
+    location: tuple = (-200, -200),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeMath")
+    node.operation = "MULTIPLY"
+    node.inputs[1].default_value = multiplier
+    node.location = location
+    return node
+
+
+def _add_principled_bsdf(
+    nt: bpy.types.NodeTree,
+    base_color: tuple = (0.54, 0.20, 0.0, 1.0),
+    emission_color: tuple = (0.57, 0.15, 0.0, 1.0),
+    emission_strength: float = 0.15,
+    metallic: float = 0.0,
+    roughness: float = 1.0,
+    location: tuple = (0, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    node.location = location
+    node.inputs["Base Color"].default_value = base_color
+    node.inputs["Metallic"].default_value = metallic
+    node.inputs["Roughness"].default_value = roughness
+    node.inputs["Emission Color"].default_value = emission_color
+    node.inputs["Emission Strength"].default_value = emission_strength
+    return node
+
+
+def _add_add_shader(
+    nt: bpy.types.NodeTree,
+    location: tuple = (0, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeAddShader")
+    node.location = location
+    return node
+
+
+##  Utility helpers
+
+def _clear_node_tree(nt: bpy.types.NodeTree) -> None:
+    """Remove all nodes from a node tree."""
+    for node in nt.nodes:
+        nt.nodes.remove(node)
+
+
+def _get_or_create_material(mat_name: str) -> bpy.types.Material:
+    """Remove any existing material with this name, then create a fresh one."""
+    existing = bpy.data.materials.get(mat_name)
+    if existing is not None:
+        bpy.data.materials.remove(existing)
+    mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    return mat
+
+## Coloour helpers
+
+def sample_matplotlib_cmap(
+    cmap_name: str = "viridis",
+    n_stops: int = 8,
+) -> typing.List[tuple]:
+    """
+    Sample a matplotlib colormap to produce ColorRamp stops.
+
+    Args:
+        cmap_name: matplotlib colormap name e.g. 'viridis', 'inferno', 'magma'
+        n_stops:   number of stops to sample
+
+    Returns:
+        List of (R, G, B, A) tuples with values in [0, 1].
+    """
+    import matplotlib.pyplot as plt
+    cmap = plt.get_cmap(cmap_name)
+    return [cmap(t) for t in np.linspace(0, 1, n_stops)]
+
+
+def autogenerate_colors(n: int, alpha: float = 1.0) -> typing.List[tuple]:
+    """Generate N evenly-spaced HSV colors, returned as (R, G, B, A)."""
+    return [colorsys.hsv_to_rgb(i / n, 0.6, 1) + (alpha,) for i in range(n)] 
+
+
+# ─────────────────────────────────────────────
+#  Public shader factories
+# ─────────────────────────────────────────────
+
+def create_volume_shaders(
+    species_names: typing.List[str],
+    field_attribute: str = "density",
+    species_colors_map: typing.Dict[str, tuple] = None,  
+    emission_multiplier: float = 0.1,
+) -> typing.Dict[str, bpy.types.Material]:
+    """
+    Create volume shaders for one or more species.
+    Existing shaders with the same name will be overwritten.
+
+    Args:
+        species_names:       list of object/species names
+        field_attribute:     attribute field to visualise for all species
+        species_colors_map:  optional dict mapping species_name to (R, G, B, A) color tuple
+        emission_multiplier: scaling for emission strength
+        
+    Returns:
+        dict: {species_name: bpy_material}
+    """
+    if isinstance(species_names, str):
+        species_names = [species_names]
+
+    N = len(species_names)
+    
+    ## Create stop for colour ramp
+    ## If no color map provided, generate one with evenly spaced hues in HSV space
+    for i, name in enumerate(species_names):
+        if species_colors_map is None:
+            colors = autogenerate_colors(N)
+            species_colors_map = {name: colors[i] for i, name in enumerate(species_names)}
+
+        stops = {
+            name: [(0.0, *species_colors_map[name]), (1.0, *species_colors_map[name])]
+            for name in species_names
+        }
+ 
+    
+    shaders = {}
+
+    for name in species_names:
+        mat = _get_or_create_material(f"{name}_volshader")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        output_node  = _add_output_node(nt, location=(400, 0))
+        volume_node  = _add_volume_principled(nt, location=(100, 0))
+        attr_node    = _add_attr_node(nt, field_attribute, location=(-400, 0))
+        ramp_node    = _add_color_ramp(nt, stops[name], location=(-200, 200))
+        math_node    = _add_emission_math(nt, emission_multiplier, location=(-200, -200))
+
+        # Links
+        nt.links.new(attr_node.outputs["Fac"],   math_node.inputs[0])
+        nt.links.new(attr_node.outputs["Fac"],   ramp_node.inputs["Fac"])
+        nt.links.new(math_node.outputs[0],       volume_node.inputs["Emission Strength"])
+        nt.links.new(ramp_node.outputs["Color"], volume_node.inputs["Emission Color"])
+        nt.links.new(volume_node.outputs["Volume"], output_node.inputs["Volume"])
+
+        shaders[name] = mat
+
+    return shaders
+
+
+def create_mesh_shaders(
+    species_names: typing.List[str],
+    base_color: typing.Dict[str, tuple] = None,
+    emission_color: typing.Dict[str, tuple] = None,
+    emission_strength: float = 0.15,
+) -> typing.Dict[str, bpy.types.Material]:
+    """
+    Create Principled BSDF mesh shaders for one or more species.
+
+    Args:
+        species_names:    list of object/species names
+        base_color:       dict mapping species names to (R, G, B, A) base color tuples
+        emission_color:   dict mapping species names to (R, G, B, A) emission color tuples
+        emission_strength: emission strength
+
+    Returns:
+        dict: {species_name: bpy_material}
+    """
+    if isinstance(species_names, str):
+        species_names = [species_names]
+
+    if base_color is None:
+        base_color = {name: (0.54, 0.20, 0.0, 1.0) for name in species_names}
+        
+    if emission_color is None:
+        emission_color = {name: (0.57, 0.15, 0.0, 1.0) for name in species_names}
+
+    shaders = {}
+
+    for name in species_names:
+        mat = _get_or_create_material(f"{name}_meshshader")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        output_node = _add_output_node(nt, location=(400, 0))
+        bsdf_node   = _add_principled_bsdf(
+            nt,
+            base_color=base_color.get(name),
+            emission_color=emission_color.get(name),
+            emission_strength=emission_strength,
+            location=(0, 0),
+        )
+
+        # Links
+        nt.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
+
+        shaders[name] = mat
+
+    return shaders
+
+
+def create_multiple_grid_shader(
+    species_name: str,
+    field_min: float = 0.0,
+    field_max: float = 1.0,
+    emission_multiplier: float = 0.1,
+    cmap_name: str = "viridis",
+) -> bpy.types.Material:
+    """
+    Create a single volume shader that combines multiple grids from one VDB
+    using an AddShader binary tree reduction.
+
+    Args:
+        species_name:        name of the volume object in bpy.data.volumes
+        field_min:           minimum field value for Map Range node
+        field_max:           maximum field value for Map Range node
+        emission_multiplier: scaling for emission strength
+        cmap_name:           name of the matplotlib colormap
+
+    Returns:
+        bpy.types.Material
+    """
+    bpy.context.scene.render.engine = "CYCLES"
+    bpy.data.volumes[species_name].grids.load()
+    grid_list = list(bpy.data.volumes[species_name].grids.keys())
+    print(f"Found {len(grid_list)} grids.")
+
+    colors = sample_matplotlib_cmap(cmap_name)
+    stops = [(i / 7, *color) for i, color in enumerate(colors)]  ## Default 8 stops in colour map
+
+    mat = _get_or_create_material(f"{species_name}_volshader")
+    nt = mat.node_tree
+    _clear_node_tree(nt)
+
+    output_node   = _add_output_node(nt, location=(1000, 0))
+    volume_outputs = []
+
+    for i, grid_name in enumerate(grid_list):
+        y = i * -300
+
+        attr_node    = _add_attr_node(nt, grid_name, location=(-800, y))
+        map_node     = _add_map_range(nt, field_min, field_max, location=(-550, y))
+        ramp_node    = _add_color_ramp(nt, stops, location=(-300, y))
+        math_node    = _add_emission_math(nt, emission_multiplier, location=(-300, y - 150))
+        volume_node  = _add_volume_principled(nt, location=(0, y))
+
+        nt.links.new(attr_node.outputs["Fac"],    map_node.inputs["Value"])
+        nt.links.new(map_node.outputs["Result"],  ramp_node.inputs["Fac"])
+        nt.links.new(map_node.outputs["Result"],  math_node.inputs[0])
+        nt.links.new(ramp_node.outputs["Color"],  volume_node.inputs["Emission Color"])
+        nt.links.new(math_node.outputs[0],        volume_node.inputs["Emission Strength"])
+
+        volume_outputs.append(volume_node.outputs["Volume"])
+
+    # Binary tree reduction using AddShader nodes
+    add_x = 350
+    level_counter = 0
+    nodes_in_current_level = len(volume_outputs)
+
+    while len(volume_outputs) > 1:
+        out1 = volume_outputs.pop(0)
+        out2 = volume_outputs.pop(0)
+
+        add_shader = _add_add_shader(nt, location=(add_x, -level_counter * 80))
+        level_counter += 1
+
+        nt.links.new(out1, add_shader.inputs[0])
+        nt.links.new(out2, add_shader.inputs[1])
+
+        volume_outputs.append(add_shader.outputs["Shader"])
+
+        nodes_in_current_level -= 2
+        if nodes_in_current_level <= 1:
+            add_x += 220
+            nodes_in_current_level = len(volume_outputs)
+
+    if volume_outputs:
+        nt.links.new(volume_outputs[0], output_node.inputs["Volume"])
+
+    return mat
+
+
+def create_volume_field_shader(
+    species_name: str,
+    field: str = "density",
+    field_min: float = 0.0,
+    field_max: float = 1.0,
+    emission_multiplier: float = 0.1,
+    cmap_name: str = "viridis",
+) -> bpy.types.Material:
+    """
+    Create a volume shader according to field values using a matplotlib colormap.
+
+    Args:
+        species_name:        name of the species
+        field:               attribute field to visualise
+        field_min:           minimum field value for Map Range node
+        field_max:           maximum field value for Map Range node
+        emission_multiplier: scaling for emission strength
+        cmap_name:           matplotlib colormap name e.g. 'viridis', 'inferno'
+
+    Returns:
+        bpy.types.Material
+    """
+    colors = sample_matplotlib_cmap(cmap_name)
+    stops = [(i / 7, *color) for i, color in enumerate(colors)] ## Default 8 stops in colour map
+    
+    mat = _get_or_create_material(f"{species_name}_volshader")
+    nt = mat.node_tree
+    _clear_node_tree(nt)
+
+    # Nodes
+    output_node    = _add_output_node(nt, location=(600, 0))
+    volume_node    = _add_volume_principled(nt, location=(300, 0))
+    attr_node      = _add_attr_node(nt, field, location=(-600, 0))
+    map_range_node = _add_map_range(nt, field_min, field_max, location=(-350, 0))
+    ramp_node      = _add_color_ramp(nt, stops, location=(-100, 200))
+    math_node      = _add_emission_math(nt, emission_multiplier, location=(-100, -200))
+
+    # Links
+    nt.links.new(attr_node.outputs["Fac"],    map_range_node.inputs["Value"])
+    nt.links.new(map_range_node.outputs["Result"], ramp_node.inputs["Fac"])
+    nt.links.new(map_range_node.outputs["Result"], math_node.inputs[0])
+    nt.links.new(math_node.outputs[0],        volume_node.inputs["Emission Strength"])
+    nt.links.new(ramp_node.outputs["Color"],  volume_node.inputs["Emission Color"])
+    nt.links.new(volume_node.outputs["Volume"], output_node.inputs["Volume"])
+
+    return mat
+```
+
+## File: Example/Rendering Surface.ipynb
+
+- Extension: .ipynb
+- Language: unknown
+- Size: 7534 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-21 02:41:33
+
+### Code
+
+```unknown
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "9f58c002",
+   "metadata": {},
+   "source": [
+    "# 🔬 Rendering Surface from SPH Particle Snapshots\n",
+    "\n",
+    "This notebook documents the full pipeline for extracting surfaces, as examplifed by the oxygen ionisation fronts from an SPH simulation and visualising them as animated meshes in Blender.\n",
+    "\n",
+    "---\n",
+    "\n",
+    "## 📦 Pipeline Overview\n",
+    "```\n",
+    "Simulation Snapshot (.hdf5) --> yt  (dataset loading) --> AstroVis (Data Processing) --> Surface Data (.npz file) --> Blender\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "c6625312",
+   "metadata": {},
+   "source": [
+    "## 1. Imports & Data Loading"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "47f2d831",
+   "metadata": {},
+   "outputs": [
+    {
+     "ename": "",
+     "evalue": "",
+     "output_type": "error",
+     "traceback": [
+      "\u001b[1;31mThe Kernel crashed while executing code in the current cell or a previous cell. \n",
+      "\u001b[1;31mPlease review the code in the cell(s) to identify a possible cause of the failure. \n",
+      "\u001b[1;31mClick <a href='https://aka.ms/vscodeJupyterKernelCrash'>here</a> for more info. \n",
+      "\u001b[1;31mView Jupyter <a href='command:jupyter.viewOutput'>log</a> for further details."
+     ]
+    }
+   ],
+   "source": [
+    "from AstroVis.backend import * ## For Surface Calculation\n",
+    "import yt"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "0249d23c",
+   "metadata": {},
+   "source": [
+    "## 2. Load Simulation Dataset and SPH Particle\n",
+    "\n",
+    "Load the HDF5 snapshot with `yt`, then generate ionisation fraction fields for oxygen species.  \n",
+    "`generate_species_fraction_fields(ds, \"O\")` scans the dataset and returns getter functions for all available oxygen ions (OI, OII, OIII, OIV, …).\n",
+    "`load_particles()` reads gas particles from `PartType0` along with the oxygen fraction fields attached above.  \n",
+    "The result `stromgren` holds both particle positions and all requested field arrays."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "aef3dbb0",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "## Loading the data from dataset\n",
+    "\n",
+    "ds = yt.load(\"output_7bin_HHeZdust_real_0060.hdf5\")\n",
+    "\n",
+    "fields = generate_species_fraction_fields(ds, \"O\")  # Generate getter functions for O species fractions\n",
+    "stromgren = load_particles(ds, ptype=\"PartType0\", fields=fields)\n",
+    "print(stromgren)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "7550ad8f",
+   "metadata": {},
+   "source": [
+    "## 3. Data Processing\n",
+    "\n",
+    "For each oxygen species fraction, we\n",
+    "\n",
+    "1. Convert SPH particle Data into 3D Grid by sph_to_grid\n",
+    "2. Extract the ionization surface by grid_to_surface() or grid_to_ridge_surface()\n",
+    "3. Save as .npz file\n",
+    "\n",
+    "Note: Two different pipelines are used depending on the ion:\n",
+    "\n",
+    "| Species | Resolution | Surface Method | Reason |\n",
+    "|---|---|---|---|\n",
+    "| `OI`, `OIV` | 256³ | `grid_to_surface` (isosurface at threshold 0.5) | Sharp, well-defined ionisation boundaries |\n",
+    "| `OII`, `OIII` | 128³ | `grid_to_ridge_surface` | Diffuse transition zones — ridge extraction captures the gradient peak |"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "f87d9699",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "grid = {}\n",
+    "surface = {}\n",
+    "\n",
+    "for species, fracion in stromgren.fields.items():\n",
+    "    \n",
+    "    if species == \"OI_fraction\" or species == \"OIV_fraction\":\n",
+    "\n",
+    "        grid[species] = sph_to_grid(stromgren, species, res = 256)\n",
+    "        surface[species] = grid_to_surface(grid[species], threshold=0.5, scale = 256)\n",
+    "        save(f\"{species}_surface.npz\", {f\"{species}\": surface[species]})\n",
+    "    \n",
+    "    elif species == \"OII_fraction\":\n",
+    "        grid[species] = sph_to_grid(stromgren, species, res = 256)\n",
+    "        surface[species] = grid_to_ridge_surface(grid[species], min_cluster_size=250, scale = 256)\n",
+    "        save(f\"{species}_surface.npz\", {f\"{species}\": surface[species]})\n",
+    "        \n",
+    "    elif species == \"OIII_fraction\":\n",
+    "        grid[species] = sph_to_grid(stromgren, species, res = 256)\n",
+    "        surface[species] = grid_to_ridge_surface(grid[species], min_cluster_size=2000, scale = 256)\n",
+    "        save(f\"{species}_surface.npz\", {f\"{species}\": surface[species]})\n",
+    "\n",
+    "    else:\n",
+    "        continue\n",
+    "\n",
+    "\n",
+    "    \n",
+    "    "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b1206639",
+   "metadata": {},
+   "source": [
+    "## 4. Setup Animation in Blender \n",
+    "\n",
+    "> ⚠️ Run the cells below inside Blender's **Python Console** or **Text Editor** — `bpy` is only available there.\n",
+    "\n",
+    "Each `.npz` file (saved in Section 3) is loaded back and registered as an animated mesh in Blender.\n",
+    "\n",
+    "| Variable | File | Shader | `position_scale` |\n",
+    "|---|---|---|---|\n",
+    "| `OI` | `OI_fraction_surface.npz` | `OII_trans` | 256 | \n",
+    "| `OII` | `OII_fraction_surface.npz` | `OII_trans` | 256 | \n",
+    "| `OIII` | `OIII_fraction_surface.npz` | `OIII_trans` | 256 | \n",
+    "| `OIV` | `OIV_fraction_surface.npz` | `OIV_trans` | 256 | \n",
+    "\n",
+    "`create_mesh_shader()` create a translucent material for ions.\n",
+    "`setup_mesh_animation()` creates a Blender mesh object and keyframes vertex positions across frames.  \n",
+    "`set_object_shader()` assigns the shader to the object."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "fa3eed57",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "surface_folder = r\"Path\\To\\Surface\\Files\" ## Change this to the actual path where the surface files are stored\n",
+    "\n",
+    "create_mesh_shader(['OI_surface', 'OII_surface', 'OIII_surface', 'OIV_surface'])\n",
+    "\n",
+    "OI_data = load(rf\"{surface_folder}\\OI_fraction_surface.npz\")\n",
+    "OI      = setup_mesh_animation(OI_data,  \"OI_surface\",   position_scale=256)\n",
+    "set_object_shader(OI,   \"OI_surface_meshshader\")\n",
+    "\n",
+    "OII_data = load(rf\"{surface_folder}\\OII_fraction_surface.npz\")\n",
+    "OII      = setup_mesh_animation(OII_data, \"OII_surface\",   position_scale=256)\n",
+    "set_object_shader(OII,  \"OII_surface_meshshader\")\n",
+    "\n",
+    "OIII_data = load(rf\"{surface_folder}\\OIII_fraction_surface.npz\")\n",
+    "OIII      = setup_mesh_animation(OIII_data, \"OIII_surface\", position_scale=256)\n",
+    "set_object_shader(OIII, \"OIII_surface_meshshader\")\n",
+    "\n",
+    "OIV_data = load(rf\"{surface_folder}\\OIV_fraction_surface.npz\")\n",
+    "OIV      = setup_mesh_animation(OIV_data,  \"OIV_surface\", position_scale=256)\n",
+    "set_object_shader(OIV,  \"OIV_surface_meshshader\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "env_1",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.11.11"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+```
+
+## File: Example/Rendering Volume Snapshots.ipynb
+
+- Extension: .ipynb
+- Language: unknown
+- Size: 6887 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:52:02
+
+### Code
+
+```unknown
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "327d990d",
+   "metadata": {},
+   "source": [
+    "# 🌌 Rendering Volume Snapshots \n",
+    "\n",
+    "This notebook walks through the process of rendering Volume Snapshots as examplifed by converting Athena++ MHD simulation snapshots (`.athdf` files) into **OpenVDB volumetric files** for 3D rendering in Blender.\n",
+    "\n",
+    "---\n",
+    "\n",
+    "## 📦 Pipeline Overview\n",
+    "\n",
+    "```\n",
+    "Athena++ Snapshots (.athdf) --> yt (Data Loading) --> AstroVis (Data Processing) --> OpenVDB Volumes (.vdb file) --> Blender\n",
+    "\n",
+    "```\n",
+    "The Data Processing Part by AstroVis has to be ran outside Blender with python 3.8."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "3ed839d5",
+   "metadata": {},
+   "source": [
+    "## 1. Imports Library\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1f888dd5",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from AstroVis.vdb import *        # VDB export helpers: load_remap_amr_volume, volume_to_multiple_vdbs\n",
+    "import yt                         # Astrophysical data analysis framework\n",
+    "import os                         # Standard file system utilities"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8649beb6",
+   "metadata": {},
+   "source": [
+    "## 2. Snapshot Selection\n",
+    "\n",
+    "Define where to read snapshots from and where to write VDB frames to.Scan the input directory for `.athdf` files, sort them so frames are in chronological order.\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "5229e71e",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# --- Paths ---\n",
+    "input_dir  = \"M1AD1_snapshots\"   # Folder containing Athena++ .athdf snapshot files\n",
+    "output_dir = \"M1AD1_vdb\"         # Folder where per-frame .vdb files will be written\n",
+    "\n",
+    "os.makedirs(output_dir, exist_ok=True)\n",
+    "\n",
+    "snapshots = sorted([\n",
+    "    f for f in os.listdir(input_dir)\n",
+    "    if f.endswith(\".athdf\")\n",
+    "])\n",
+    "\n",
+    "print(f\"Snapshots Found       : {len(snapshots)}\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "635f381b",
+   "metadata": {},
+   "source": [
+    "## 3. Data Processing\n",
+    "\n",
+    "For each snapshot we:\n",
+    "\n",
+    "1. **Load** the dataset with `yt.load()`\n",
+    "2. **Remap** the AMR (Adaptive Mesh Refinement) grid  with `load_remap_amr_volume()` to prevent overlapping\n",
+    "3. **Export** the density field as a VDB file with `volume_to_multiple_vdbs()`\n",
+    "\n",
+    "### Parameter Notes\n",
+    "\n",
+    "| Parameter | Value | Meaning |\n",
+    "|---|---|---|\n",
+    "| `field` | `'density'` | The physical field to volumetrize (mass density ρ) |\n",
+    "| `scale` | `20` | Spatial scale factor applied when writing the VDB grid |\n",
+    "| `file_name_prefix` | `frame_NNN` | Output filename base; the function appends `.vdb` |"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "a8a494df",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for frame_num, snapshot in enumerate(snapshots):\n",
+    "    \n",
+    "    filepath = os.path.join(input_dir, snapshot)\n",
+    "\n",
+    "    # --- Step 1: Load the Athena++ snapshot via yt ---\n",
+    "    ds = yt.load(filepath)\n",
+    "\n",
+    "    # --- Step 2: Remap AMR hierarchy → uniform volume array ---\n",
+    "    fh = load_remap_amr_volume(ds)\n",
+    "\n",
+    "    # --- Step 3: Write density field to VDB ---\n",
+    "    volume_to_multiple_vdbs(\n",
+    "        fh,\n",
+    "        field='density',\n",
+    "        scale=20,\n",
+    "        file_name_prefix=f\"{output_dir}/frame_{frame_num:03d}/frame_{frame_num:03d}\" ## Create subfolder for each frame\n",
+    "    )\n",
+    "\n",
+    "    print(f\" Snapshot {snapshot} is processed to frame_{frame_num:03d}.vdb\")\n",
+    "\n",
+    "print(f\"\\n Export complete. {frame_num + 1} VDB frames are written to '{output_dir}/'\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "102bf757",
+   "metadata": {},
+   "source": [
+    "# 4. Setup Animation in Blender\n",
+    "\n",
+    "> ⚠️ Run the cells below inside Blender's **Python Console** or **Text Editor** — `bpy` is only available there.\n",
+    "\n",
+    "With the VDB files exported, we now move into Blender to assemble them into a rendered animation. The following code runs inside Blender's built-in Python Console or Text Editor as bpy is only available there.\n",
+    "\n",
+    "In blender built-in Python Console, we\n",
+    "1. Create a material by create_volume_shaders() \n",
+    "2. Load VDB Frames as Animation by setup_volume_anaimation\n",
+    "\n",
+    "### Parameter Notes\n",
+    "\n",
+    "`setup_volume_animation()` scans the VDB folder, creates one Blender Volume object per frame, keyframes their visibility on/off, and assigns the material — producing a complete frame sequence ready to render.\n",
+    "\n",
+    "| Parameter | Value | Meaning |\n",
+    "|---|---|---|\n",
+    "| `vdb_folder` | `M1AD1_multi_vdb/` | Folder written by `volume_to_multiple_vdbs()` in Section 3 |\n",
+    "| `multi_vdb_per_frame` | `True` | Multiple `.vdb` files per snapshot (one per AMR level); the helper groups them back into one logical frame |\n",
+    "| `material` | `mat` | `star_volshader` applied to every volume object |\n",
+    "\n",
+    "**Meaning of `multi_vdb_per_frame=True`:**\n",
+    "```\n",
+    "frame_000_level0.vdb ┐\n",
+    "frame_000_level1.vdb ├─► Multiple Volume object, visible only at frame 0\n",
+    "frame_000_level2.vdb ┘\n",
+    "frame_001_level0.vdb ┐\n",
+    "frame_001_level1.vdb ├─► Multiple Volume object, visible only at frame 1\n",
+    "frame_001_level2.vdb ┘\n",
+    "```\n",
+    "\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "b151893a",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import bpy\n",
+    "from AstroVis.api import *  ## Note that it is import from .api rather then .vdb\n",
+    "\n",
+    "\n",
+    "vdb_folder = r\"Your/Path/To/M1AD1_vdb\"  # Path to the folder containing the per-frame VDB subfolders\n",
+    "\n",
+    "## Step 1: Create a volume shader for the star formation visualization\n",
+    "create_volume_shaders(\"star\")\n",
+    "mat = bpy.data.materials.get(\"star_volshader\") # The name of volume matieral is name + \"_volshader\"\n",
+    "\n",
+    "## Step 2: Set up the volume animation in Blender using the exported VDB files\n",
+    "setup_volume_animation(vdb_folder, multi_vdb_per_frame = True, material = mat)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.10.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+```
+
+## File: Example/Rendering Particle Mesh.ipynb
+
+- Extension: .ipynb
+- Language: unknown
+- Size: 5409 bytes
+- Created: 2026-05-28 10:42:19
+- Modified: 2026-05-14 12:52:02
+
+### Code
+
+```unknown
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "df42405e",
+   "metadata": {},
+   "source": [
+    "# 💥 Planetary Impact Visualisation\n",
+    "\n",
+    "This notebook documents the pipeline for rendering particle mesh as examplifed by SPH planetary impact snapshots and visualising them as animated meshes in Blender.\n",
+    "\n",
+    "---\n",
+    "\n",
+    "## 📦 Pipeline Overview\n",
+    "```\n",
+    "SPH Snapshots (.hdf5) --> yt (dateset loading) --> AstroVis (data processing) --> Surface and Gas Data (.npz files) --> Blender\n",
+    "```\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "07b79fc0",
+   "metadata": {},
+   "source": [
+    "## 1. Imports & Configuration\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "88a2348b",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from AstroVis.backend import *\n",
+    "import yt\n",
+    "import numpy as np\n",
+    "\n",
+    "res       = 1024                          # Voxel resolution of the density grid\n",
+    "input_dir = \"star_impacts_snapshots_270\"  "
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8e642c5c",
+   "metadata": {},
+   "source": [
+    "## 2. Data Processing\n",
+    "\n",
+    "For each of the snapshots we run:\n",
+    "\n",
+    "1. Load Snapshot by yt.load()\n",
+    "2. Convert the particle to grid by sph_to_grid()\n",
+    "3. Extract planet surface by grid_to_surface()\n",
+    "4. Filter emission gas by filter ()\n",
+    "5. Save Extracted data by save()\n",
+    "\n",
+    "| Output | Method | Description |\n",
+    "|---|---|---|\n",
+    "| `planet_surface` | `grid_to_surface(threshold=0.003)` | Isosurface mesh at the density boundary separating solid/liquid planet from surrounding gas |\n",
+    "| `planet_emission_gas` | `planet.filter(densities > 0.003)` | Filter the low densities gas out|\n",
+    "\n",
+    "The same threshold `0.003` is used for both so the surface mesh and emission gas particles align in the final render."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "62081edd",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "planet_surface      = []\n",
+    "planet_emission_gas = []\n",
+    "\n",
+    "for i in range(270):\n",
+    "\n",
+    "    # --- Load snapshot ---\n",
+    "    ds     = yt.load(f\"{input_dir}/demo_impact_n50_{i:04d}.hdf5\")\n",
+    "    planet = load_particles(ds, ptype=\"PartType0\")\n",
+    "\n",
+    "    # --- SPH → uniform grid → isosurface mesh ---\n",
+    "    planet_grid = sph_to_grid(planet, field=\"density\", res=res)\n",
+    "    planet_surface.append(\n",
+    "        grid_to_surface(planet_grid, threshold=0.003, field=\"density\")\n",
+    "    )\n",
+    "\n",
+    "    # --- Filter high-density emission gas particles ---\n",
+    "    emission_gas = planet.filter(planet.densities > 0.003)\n",
+    "    planet_emission_gas.append(emission_gas)\n",
+    "\n",
+    "    print(f\"Frame {i:03d} built successfully.\")\n",
+    "    \n",
+    "data = {\n",
+    "    \"planet_surface\":      planet_surface,\n",
+    "    \"planet_emission_gas\": planet_emission_gas\n",
+    "}\n",
+    "\n",
+    "save(\"planet_data.npz\", data)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "cdf33ba0",
+   "metadata": {},
+   "source": [
+    "## 3. Setup Animation in Blender\n",
+    "\n",
+    "> ⚠️ Run the cells below inside Blender's **Python Console** or **Text Editor** — `bpy` is only available there.\n",
+    "\n",
+    "Reload `planet_data.npz` from disk and unpack the two frame arrays.  \n",
+    "`data['Particles']` holds the filtered SPH emission gas; `data['Surface']` holds the isosurface meshes.\n",
+    "\n",
+    "Each dataset gets its own shader and animated mesh object in Blender.\n",
+    "\n",
+    "| Object | Data | Shader | Visual Role |\n",
+    "|---|---|---|---|\n",
+    "| `gas` | `particle` | `gas` | Glowing emission plume — high-density ejecta particles |\n",
+    "| `surface` | `surface` | `surface` | Solid planet body — isosurface mesh boundary |\n",
+    "\n",
+    "`create_mesh_shader()` builds a material node-tree for each role.  \n",
+    "`setup_mesh_animation()` creates a Blender mesh object and keyframes vertex positions across all 270 frames.  \n",
+    "`set_object_shader()` assigns the matching material to the object.\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "c5a9da3c",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# --- Load data for animation ---\n",
+    "from AstroVis.api import *\n",
+    "\n",
+    "npz_folder = r\"Your\\Path\\To\\planet_data.npz\"  # Update this path to where you saved the .npz file\n",
+    "data = load(npz_folder)\n",
+    "\n",
+    "particle = data['Particles']['planet_emission_gas']\n",
+    "surface  = data['Surface']['planet_surface']\n",
+    "\n",
+    "# --- Emission gas (particles) ---\n",
+    "create_mesh_shader(\"gas\")\n",
+    "setup_mesh_animation(particle, \"gas\")\n",
+    "set_object_shader(\"gas\")\n",
+    "\n",
+    "# --- Planet surface (isosurface mesh) ---\n",
+    "create_mesh_shader(\"surface\")\n",
+    "setup_mesh_animation(surface, \"surface\")\n",
+    "set_object_shader(\"surface\")\n",
+    "\n",
+    "print(\"Mesh animations and shaders set up. Press SPACE in the Blender viewport to preview the animation.\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "language_info": {
+   "name": "python"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+
+```
+

@@ -65,5 +65,7 @@ from .Blender_Effect.node import (
 )
 from .Blender_Effect.shading import (
     create_volume_shaders,
-    create_mesh_shaders
+    create_mesh_shaders,
+    create_multiple_grid_shader,
+    create_volume_field_shader
 )
