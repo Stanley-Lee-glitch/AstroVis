@@ -2,7 +2,7 @@ import numpy as np
 import pyopenvdb as vdb
 from .volume_data import FieldHierarchy, GridLevel, GridBlock
 
-def convert_vdb(
+def grid_to_vdb(
     grid_data: GridBlock,
     field: str = "density",
     scale: float = 1.0,
@@ -45,7 +45,7 @@ def convert_vdb(
     vdb.write(file_name, grids=[density])
     
 ## One vdb with all grids for each frame
-def volume_to_vdb(
+def hierarchy_to_vdb(
     hierarchy: FieldHierarchy,
     field: str = 'density',
     file_name_prefix: str = "volume",
@@ -93,7 +93,7 @@ def volume_to_vdb(
     vdb.write(file_name, grids=grids_to_save)
 
 ## Multiple VDBs for each frame
-def volume_to_multiple_vdbs(
+def hierarchy_to_multiple_vdbs(
     hierarchy: FieldHierarchy,
     field: str = 'density',
     file_name_prefix: str = "volume",
@@ -120,7 +120,7 @@ def volume_to_multiple_vdbs(
             global_max = max(global_max, block_data.fields[field].max())
             
             file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}"
-            convert_vdb(block_data, field=field, scale=scale, file_path=file_name, log=False)
+            grid_to_vdb(block_data, field=field, scale=scale, file_path=file_name, log=False)
     
     print(f"GLOBAL RANGE: Min: {global_min:.4f}, Max: {global_max:.4f}")
     print(f"Finished exporting {len(hierarchy.levels)} levels with a total of {sum(len(level.blocks) for level in hierarchy.levels.values())} blocks to VDB files.")
