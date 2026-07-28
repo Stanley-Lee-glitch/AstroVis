@@ -74,6 +74,10 @@ def grid_to_surface(
         center_of_mass = verts.mean(axis=0)
         verts -= center_of_mass
         print(f"  Mesh is relocated at centered.")
+        print(f"  Left edge: {grid_data.left_edge - center_of_mass}, Right edge: {grid_data.right_edge - center_of_mass}")
+    else:
+        print(f"  Left edge: {grid_data.left_edge}, Right edge: {grid_data.right_edge}")
+
         
     if build_obj:
         obj_path = f"{field}_surface.obj"
