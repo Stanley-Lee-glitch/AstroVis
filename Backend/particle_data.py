@@ -4,8 +4,6 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Union, Callable, Tuple
 
-
-
 @dataclass
 class SPHFields:
     data: Dict[str, np.ndarray] = field(default_factory=dict)
@@ -32,10 +30,6 @@ class SPHFields:
     def keys(self):
         """Return all field names."""
         return self.data.keys()
-
-    def values(self):
-        """Return all field values."""
-        return self.data.values()
 
     def items(self):
         """Return all (key, value) pairs."""
@@ -81,6 +75,10 @@ class SPHParticleData:
         if "fields" in self.__dict__ and key in self.fields:
             return self.fields[key]
         raise AttributeError(f"'{key}' not found in particle data or fields.")
+
+    def keys(self):
+        """Return all available field names, including attributes and fields."""
+        return list(self.__dict__.keys()) + list(self.fields.keys())
 
     def filter(self, mask: np.ndarray):
         """

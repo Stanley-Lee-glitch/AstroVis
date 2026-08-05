@@ -13,6 +13,9 @@ class GridBlock:
     right_edge: np.ndarray  # (3,) array of floats
     dims: np.ndarray  # (3,) array of ints
     fields: Dict[str, np.ndarray]
+    
+    def keys(self):
+        return list(self.fields.keys())
 
 @dataclass
 class GridLevel:
@@ -50,8 +53,7 @@ class FieldHierarchy:
                 "num_blocks": lvl_data.num_blocks,
                 "cell_size": lvl_data.cell_size,
             }
-        return info
-        
+        return info      
 
 
 def load_volume(ds, vtype = "gas", fields=["density"], levels=None, region=None):
