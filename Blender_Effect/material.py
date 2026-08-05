@@ -1,3 +1,10 @@
+## This module provides functions to create volume and mesh materials in Blender, including
+#  - create_volume_materials: Create individual volume materials for multiple species.
+#  - create_mesh_materials: Create individual Principled BSDF mesh materials for multiple species.
+#  - create_combined_grid_material: Create a single volume material combining multiple VDB grids via binary tree reduction.
+#  - create_field_volume_material: Create a continuous field-driven volume material using a matplotlib colormap.
+
+
 import bpy
 import colorsys
 import typing
@@ -171,23 +178,21 @@ def sample_matplotlib_cmap(
 
 
 def autogenerate_colors(n: int, alpha: float = 1.0) -> typing.List[tuple]:
-    """Generate N evenly-spaced HSV colors, returned as (R, G, B, A)."""
+    """Generate N evenly-spaced HSV colors, returned as list of (R, G, B, A)."""
     return [colorsys.hsv_to_rgb(i / n, 0.6, 1) + (alpha,) for i in range(n)] 
 
 
-# ─────────────────────────────────────────────
 #  Public shader factories
-# ─────────────────────────────────────────────
 
-def create_volume_shaders(
+def create_volume_materials(
     species_names: typing.List[str],
     field_attribute: str = "density",
     species_colors_map: typing.Dict[str, tuple] = None,  
     emission_multiplier: float = 0.1,
 ) -> typing.Dict[str, bpy.types.Material]:
     """
-    Create volume shaders for one or more species.
-    Existing shaders with the same name will be overwritten.
+    Create volume materials for one or more species.
+    Existing materials with the same name will be overwritten.
 
     Args:
         species_names:       list of object/species names
@@ -205,21 +210,20 @@ def create_volume_shaders(
     
     ## Create stop for colour ramp
     ## If no color map provided, generate one with evenly spaced hues in HSV space
-    for i, name in enumerate(species_names):
-        if species_colors_map is None:
-            colors = autogenerate_colors(N)
-            species_colors_map = {name: colors[i] for i, name in enumerate(species_names)}
+    if species_colors_map is None:
+        colors = autogenerate_colors(N)
+        species_colors_map = {name: colors[i] for i, name in enumerate(species_names)}
 
-        stops = {
-            name: [(0.0, *species_colors_map[name]), (1.0, *species_colors_map[name])]
-            for name in species_names
-        }
+    stops = {
+        name: [(0.0, *species_colors_map[name]), (1.0, *species_colors_map[name])]
+        for name in species_names
+    }
  
     
-    shaders = {}
+    materials = {}
 
     for name in species_names:
-        mat = _get_or_create_material(f"{name}_volshader")
+        mat = _get_or_create_material(f"{name}_volmaterial")
         nt = mat.node_tree
         _clear_node_tree(nt)
 
@@ -237,19 +241,19 @@ def create_volume_shaders(
         nt.links.new(ramp_node.outputs["Color"], volume_node.inputs["Emission Color"])
         nt.links.new(volume_node.outputs["Volume"], output_node.inputs["Volume"])
 
-        shaders[name] = mat
+        materials[name] = mat
 
-    return shaders
+    return materials
 
 
-def create_mesh_shaders(
+def create_mesh_materials(
     species_names: typing.List[str],
     base_color: typing.Dict[str, tuple] = None,
     emission_color: typing.Dict[str, tuple] = None,
     emission_strength: float = 0.15,
 ) -> typing.Dict[str, bpy.types.Material]:
     """
-    Create Principled BSDF mesh shaders for one or more species.
+    Create Principled BSDF mesh materials for one or more species.
 
     Args:
         species_names:    list of object/species names
@@ -269,10 +273,10 @@ def create_mesh_shaders(
     if emission_color is None:
         emission_color = {name: (0.57, 0.15, 0.0, 1.0) for name in species_names}
 
-    shaders = {}
+    materials = {}
 
     for name in species_names:
-        mat = _get_or_create_material(f"{name}_meshshader")
+        mat = _get_or_create_material(f"{name}_meshmaterial")
         nt = mat.node_tree
         _clear_node_tree(nt)
 
@@ -289,12 +293,12 @@ def create_mesh_shaders(
         # Links
         nt.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
 
-        shaders[name] = mat
+        materials[name] = mat
 
-    return shaders
+    return materials
 
 
-def create_multiple_grid_shader(
+def create_combined_grid_material(
     species_name: str,
     field_min: float = 0.0,
     field_max: float = 1.0,
@@ -302,7 +306,7 @@ def create_multiple_grid_shader(
     cmap_name: str = "viridis",
 ) -> bpy.types.Material:
     """
-    Create a single volume shader that combines multiple grids from one VDB
+    Create a single volume material that combines multiple grids from one VDB
     using an AddShader binary tree reduction.
 
     Args:
@@ -323,7 +327,7 @@ def create_multiple_grid_shader(
     colors = sample_matplotlib_cmap(cmap_name)
     stops = [(i / 7, *color) for i, color in enumerate(colors)]  ## Default 8 stops in colour map
 
-    mat = _get_or_create_material(f"{species_name}_volshader")
+    mat = _get_or_create_material(f"{species_name}_volmaterial")
     nt = mat.node_tree
     _clear_node_tree(nt)
 
@@ -375,7 +379,7 @@ def create_multiple_grid_shader(
     return mat
 
 
-def create_volume_field_shader(
+def create_field_volume_material(
     species_name: str,
     field: str = "density",
     field_min: float = 0.0,
@@ -384,7 +388,7 @@ def create_volume_field_shader(
     cmap_name: str = "viridis",
 ) -> bpy.types.Material:
     """
-    Create a volume shader according to field values using a matplotlib colormap.
+    Create a volume material according to field values using a matplotlib colormap.
 
     Args:
         species_name:        name of the species
@@ -400,7 +404,7 @@ def create_volume_field_shader(
     colors = sample_matplotlib_cmap(cmap_name)
     stops = [(i / 7, *color) for i, color in enumerate(colors)] ## Default 8 stops in colour map
     
-    mat = _get_or_create_material(f"{species_name}_volshader")
+    mat = _get_or_create_material(f"{species_name}_volmaterial")
     nt = mat.node_tree
     _clear_node_tree(nt)
 
