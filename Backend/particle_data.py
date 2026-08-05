@@ -2,7 +2,7 @@
 
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, Union, Callable, Tuple
+from typing import List, Dict, Union, Callable, Tuple
 
 
 
@@ -109,7 +109,7 @@ class SPHParticleData:
     
 def load_particles(ds, 
                    ptype="stars", 
-                   fields: Union[list, Dict[str, Callable[[], np.ndarray]]] = None, 
+                   fields: Union[str, List[str], Dict[str, Callable[[], np.ndarray]]] = None, 
                    region=None):
     """
     Load particle data from a yt dataset.
@@ -120,17 +120,21 @@ def load_particles(ds,
         The yt dataset object.
     ptype : str
         Particle type name (e.g., 'stars', 'dark_matter')
-    fields : list or dict or Callable
-        - List of field names to extract (e.g., ['mass', 'temperature']),
-            [ptype, field] can be checked by ds.derived_field_list 
+    fields : str or list[str] or dict[str, Callable]
+        - str: A single field name (e.g., 'mass')
+        - list[str]: List of field names to extract (e.g., ['mass', 'temperature']),
+            ** [ptype, field] can be checked by ds.derived_field_list / ds.field_list
         - Dict of field name to callable that returns the field array.
-            Example: 
+            Example:
             def custom_field():
                 ad = ds.all_data()
                 data = ad[ptype, "SomeField"].to_value()
                 return np.ascontiguousarray(data)
-            You may use generate_species_fraction_fields to create such a dict for species fractions for SWIFT datasets.
-            However, addition fields must be added manually to the dict by callable functions.
+            You may use generate_species_fraction_fields to create such a dict for species
+            fractions for SWIFT datasets. To combine multiple such dicts (e.g. several
+            species), merge them yourself before calling this function:
+                fields = {**O_fields, **H_fields}
+            Additional fields must be added manually to the dict by callable functions.
     region : yt object or None
         A region (sphere, box) to subset particles
 
@@ -146,8 +150,8 @@ def load_particles(ds,
     coordinates = data_source[ptype, "Coordinates"].to_value()
 
     print(f"\n{'='*50}")
-    print(f"Loading {coordinates.shape[0]} particles of type '{ptype}' with field '{fields}'.")
-    print(f"{'='*50}")
+    print(f"Loading {coordinates.shape[0]} particles of type '{ptype}'.")
+    print(f"{'-'*50}")
         
     if (ptype, "SmoothingLengths") in ds.field_list:
         smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
@@ -175,23 +179,31 @@ def load_particles(ds,
     right_edge = ds.domain_right_edge.to_value() if ds.domain_right_edge is not None else None
     print(f"  Right edge: {right_edge}")
 
-    # Particle fields 
     field_data = {}
     if fields is not None:
-        if isinstance(fields, list):
+        if isinstance(fields, str):
+            field_data[fields] = data_source[ptype, fields].to_value()
+            print(f"  Field '{fields}' loaded for {field_data[fields].shape[0]} particles.")
+
+        elif isinstance(fields, list):
             for f in fields:
+                if not isinstance(f, str):
+                    raise ValueError(f"List `fields` must contain only field name strings, got {type(f)}.")
                 field_data[f] = data_source[ptype, f].to_value()
                 print(f"  Field '{f}' loaded for {field_data[f].shape[0]} particles.")
-        
+
         elif isinstance(fields, dict):
             for f, func in fields.items():
-                if callable(func):
-                    field_data[f] = func()
-                    print(f"  Field '{f}' loaded via callable for {field_data[f].shape[0]} particles.")
-                else:
+                if not callable(func):
                     raise ValueError(f"Field '{f}' in fields dict must be a callable returning an array.")
+                field_data[f] = func()
+                print(f"  Field '{f}' loaded via callable for {field_data[f].shape[0]} particles.")
+
         else:
-            raise ValueError("Fields parameter must be a list of field names or a dict of field name to callable.")
+            raise ValueError(
+                "Fields parameter must be a field name (str), a list of field names, "
+                "or a dict of field name to callable."
+            )
                     
     sph_fields_data = SPHFields(data=field_data)
 

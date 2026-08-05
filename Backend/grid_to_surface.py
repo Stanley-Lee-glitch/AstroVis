@@ -7,46 +7,93 @@ from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from .volume_data import GridBlock
 from .surface_data import SurfaceData
+from typing import Union, List, Dict
 
+def preview_field_slice(
+    grid_data : GridBlock,
+    fields    : Union[str, List[str]] = None,
+    axis      : int = 0,
+    slice_idx : int = None,
+):
+    """
+    Quick look at one or more fields before choosing an extraction method.
 
-# ============================================================
+    - A field with a clean, single-mode threshold in its histogram and a
+      blob-like slice -> grid_to_surface (isosurface) is usually enough.
+    - A field with filamentary / ridge-like structure and no clean single
+      threshold -> grid_to_ridge_surface is usually better.
+
+    Parameters
+    ----------
+    grid_data : GridBlock
+    fields    : str or list[str] or None
+        Field name(s) to preview. If None, previews every field in grid_data.fields.
+    axis      : int   axis_map = {'z': 0, 'y': 1, 'x': 2} (default: 'z')
+    slice_idx : int   Index along `axis` for plot (default: middle of that axis)
+    """
+    if fields is None:
+        fields = list(grid_data.fields.keys())
+    elif isinstance(fields, str):
+        fields = [fields]
+
+    valid_fields = [f for f in fields if f in grid_data.fields]
+    for f in fields:
+        if f not in grid_data.fields:
+            print(f"  [WARNING] Field '{f}' not found in grid_data.fields; skipping.")
+
+    if not valid_fields:
+        print("  [WARNING] No valid fields to preview.")
+        return
+
+    n = len(valid_fields)
+    fig, axes = plt.subplots(n, 2, figsize=(12, 5 * n), squeeze=False)
+    fig.suptitle(f"Field Preview  |  axis={axis}")
+
+    for row, field in enumerate(valid_fields):
+        volume = grid_data.fields[field]
+        s_idx = slice_idx if slice_idx is not None else volume.shape[axis] // 2
+        slice_2d = np.take(volume, s_idx, axis=axis)
+
+        im = axes[row, 0].imshow(slice_2d, cmap='viridis', origin='lower')
+        axes[row, 0].set_title(f"'{field}'  |  index={s_idx}")
+        plt.colorbar(im, ax=axes[row, 0])
+
+        axes[row, 1].hist(volume.ravel(), bins=100, color='steelblue')
+        axes[row, 1].set_yscale('log')
+        axes[row, 1].set_title(f"'{field}' value distribution")
+        axes[row, 1].set_xlabel(field)
+        axes[row, 1].set_ylabel("Voxel count (log)")
+
+    plt.tight_layout()
+    plt.savefig(f"preview.png", dpi=150)
+    plt.show()
+    print(f"  Saved: preview.png")
+
 # Method 1: Isosurface Extraction
-# ============================================================
 
 def grid_to_surface(
     grid_data   : GridBlock,
     threshold   : float,
-    field       : str  = None,
+    field       : str = None,
     # --- Parameters of surface ---
     build_obj   : bool = False,
     center      : bool = True,
     scale       : float = 1.0,
-    # --- Quick check ---
-    plot_surface: bool = False
+    # --- Plotting Check ---
+    plot_surface: bool = True,
+    axis        : int  = 0,
+    slice_idx   : int  = None,
 ) -> SurfaceData:
     """
-    Extract an isosurface from a 3D grid field using marching cubes.
-
-    Parameters
-    ----------
-    grid_data   : GridBlock   Input volumetric data
-    threshold   : float       Isovalue for surface extraction
-    field       : str         Field name to use (default: only/density field)
-    build_obj   : bool        If True, export mesh as .obj file
-    center      : bool        If True, center the surface at the origin
-    scale       : float       The scale factor for the surface (from the width of GridBlock)
-    plot_surface : bool       If True, plot the surface cross-section
+    Extract an isosurface from a single 3D grid field using marching cubes.
     """
     if field is None:
         field = list(grid_data.fields.keys())[0] if len(grid_data.fields) == 1 else "density"
 
     print(f"\n{'='*50}")
-    print(f"Running Isosurface Extraction...")
-    print(f"{'='*50}")
-    print(f"  Field     : {field}")
-    print(f"  Threshold : {threshold}")
+    print(f"Running Isosurface Extraction for field {field} at threshold {threshold}...")
+    print(f"{'-'*50}")
 
-    ## Assume the grid having box width of 1
     dx = 1 / grid_data.dims[0]
     dy = 1 / grid_data.dims[1]
     dz = 1 / grid_data.dims[2]
@@ -63,13 +110,13 @@ def grid_to_surface(
 
     print(f"  Vertices  : {len(verts)}")
     print(f"  Faces     : {len(faces)}")
-   
-    scale_factor = np.array([grid_data.right_edge[0] - grid_data.left_edge[0], 
-                             grid_data.right_edge[1] - grid_data.left_edge[1], 
-                             grid_data.right_edge[2] - grid_data.left_edge[2]]) * scale
+
+    scale_factor = np.array([grid_data.right_edge[0] - grid_data.left_edge[0],
+                              grid_data.right_edge[1] - grid_data.left_edge[1],
+                              grid_data.right_edge[2] - grid_data.left_edge[2]]) * scale
     verts *= scale_factor
     print(f"  Width of domain: {scale_factor}")
-    
+
     if center:
         center_of_mass = verts.mean(axis=0)
         verts -= center_of_mass
@@ -78,7 +125,6 @@ def grid_to_surface(
     else:
         print(f"  Left edge: {grid_data.left_edge}, Right edge: {grid_data.right_edge}")
 
-        
     if build_obj:
         obj_path = f"{field}_surface.obj"
         mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
@@ -86,15 +132,63 @@ def grid_to_surface(
         print(f"  Exported  : {obj_path}")
 
     if plot_surface:
-        print("  Plotting surface cross-section...") # To-do
-        
+        field_volume = grid_data.fields[field]
+        s_idx = slice_idx if slice_idx is not None else field_volume.shape[axis] // 2
+        slice_2d = np.take(field_volume, s_idx, axis=axis)
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        im = ax.imshow(slice_2d, cmap='viridis', origin='lower')
+        ax.contour(slice_2d, levels=[threshold], colors='red', linewidths=1.5)
+        plt.colorbar(im, ax=ax)
+        ax.set_title(f"Isosurface Extraction  |  field='{field}'  index={s_idx}\nthreshold={threshold}")
+        plt.tight_layout()
+        plt.savefig(f"{field}_isosurface.png", dpi=150)
+        plt.show()
+        print(f"  Saved        : {field}_isosurface.png")
+
     print(f"{'='*50}\n")
     return SurfaceData(vertices=verts, faces=faces, normals=normals)
 
 
-# ============================================================
+def grid_to_surfaces(
+    grid_data : GridBlock,
+    threshold : float,
+    fields    : Union[str, List[str]] = None,
+    **kwargs,
+) -> Dict[str, SurfaceData]:
+    """
+    Run grid_to_surface across multiple fields. Extra keyword arguments are
+    passed through to grid_to_surface for every field (e.g. build_obj, center,
+    scale, plot_surface, axis, slice_idx).
+
+    Parameters
+    ----------
+    fields : str | list[str] | None   Field name(s) (default: all fields in grid_data)
+
+    Returns
+    -------
+    dict[str, SurfaceData]   One entry per successfully extracted field.
+                              Fields that fail marching_cubes are skipped with a warning
+                              and simply omitted from the result.
+    """
+    if fields is None:
+        fields = list(grid_data.fields.keys())
+    elif isinstance(fields, str):
+        fields = [fields]
+
+    surfaces = {}
+    for field in fields:
+        result = grid_to_surface(grid_data, threshold, field=field, **kwargs)
+        if result is not None:
+            surfaces[field] = result
+        else:
+            print(f"  [WARNING] Skipping '{field}' due to extraction failure.")
+            print(f"{'='*50}\n")
+
+    return surfaces
+
+
 # Method 2: Ridge Surface Extraction
-# ============================================================
 
 def grid_to_ridge_surface(
     grid_data   : GridBlock,
@@ -109,9 +203,10 @@ def grid_to_ridge_surface(
     grid_sigma       = 1.5,    # Normal field smoothing
     isovalue_pct     = 50,     # 50=median. Lower=expand surface, Higher=shrink
     # --- Quick Checks ---
-    plot_ridge       = True,   # Plot 2D slice after ridge detection
+    plot_check       = True,   # If True, plot all three diagnostic figures: raw ridge, cleaned ridge, chi+contour
     print_components = True,   # Print component size table after filtering
-    plot_surface     = True,   # Plot chi field + mesh after reconstruction
+    axis             = 0,      # Axis to slice diagnostic plots along: 'x', 'y', or 'z'
+    slice_idx        = None,   # Index along `axis` for diagnostic plots (default: middle)
     # --- Parameter of Surface ---
     center           = True,   # If True, center the surface at the origin
     scale            = 1.0,    # The scale factor for the surface (from the width of GridBlock)
@@ -137,9 +232,10 @@ def grid_to_ridge_surface(
     grid_sigma       : float        Smoothing of normal vector field (default 1.5)
     isovalue_pct     : int          Percentile of chi at ridge for isovalue (default 50)
     scale            : float        Scale factor for the surface (default 1.0)
-    plot_ridge       : bool         Plot ridge detection result (default True)
+    plot_check       : bool         Plot ridge detection and surface result (default True)
     print_components : bool         Print connected component table (default True)
-    plot_surface     : bool         Plot final surface result (default True)
+    axis             : int          0 for z-axis, 1 for y-axis, 2 for x-axis (default: z)
+    slice_idx:       : int          Index along `axis` for plot  (default: middle)
     build_obj        : bool         If True, export mesh as .obj file
     center           : bool         If True, center the surface at the origin (default True)
 
@@ -150,14 +246,11 @@ def grid_to_ridge_surface(
     volume = grid_data.fields[field]
     shape = volume.shape
 
-    # --------------------------------------------------------
     # STEP 1: Ridge Detection via Hessian + NMS
-    # --------------------------------------------------------
     print(f"\n{'='*50}")
-    print(f"Running Ridge Surface Extraction...")
+    print(f"Running Ridge Surface Extraction for field {field}...")
+    print(f"{'-'*50}")
     print(f"STEP 1: Ridge Detection")
-    print(f"{'='*50}")
-    print(f"  Field        : {field}")
     print(f"  Volume shape : {shape}")
     print(f"  Sigma        : {sigma}")
     print(f"  Lambda pct   : {lambda_pct}")
@@ -212,34 +305,9 @@ def grid_to_ridge_surface(
 
     print(f"  Ridge voxels : {thin_ridge_mask.sum()}  (after NMS)")
 
-    if plot_ridge:
-        slice_idx = shape[0] // 2
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        fig.suptitle(f"Step 1: Ridge Detection  |  slice z={slice_idx}  |  sigma={sigma}, lambda_pct={lambda_pct}")
-
-        axes[0].imshow(smoothed[slice_idx], cmap='gray', origin='lower')
-        axes[0].set_title("Smoothed Volume")
-
-        axes[1].imshow(smoothed[slice_idx], cmap='gray', origin='lower')
-        y_r, x_r = np.where(thin_ridge_mask[slice_idx])
-        axes[1].scatter(x_r, y_r, color='red', s=1)
-        axes[1].set_title(f"Ridge Points  (n={thin_ridge_mask.sum()})")
-
-        im3 = axes[2].imshow(l3[slice_idx], cmap='RdBu', origin='lower')
-        axes[2].set_title("l3 Hessian Eigenvalue")
-        plt.colorbar(im3, ax=axes[2])
-
-        plt.tight_layout()
-        plt.savefig(f"{field}_ridge_check.png", dpi=150)
-        plt.show()
-        print(f"  Saved        : {field}_ridge_check.png")
-
-    # --------------------------------------------------------
     # STEP 2: Connected Component Filtering
-    # --------------------------------------------------------
-    print(f"\n{'='*50}")
+    print(f"\n{'-'*50}")
     print(f"STEP 2: Component Filtering")
-    print(f"{'='*50}")
     print(f"  Min cluster size : {min_cluster_size}")
 
     struct = ndimage.generate_binary_structure(3, 3)
@@ -265,12 +333,9 @@ def grid_to_ridge_surface(
     print(f"\n  Components kept  : {n_kept} / {num_features}")
     print(f"  Voxels           : {thin_ridge_mask.sum()} → {cleaned_mask.sum()}")
 
-    # --------------------------------------------------------
     # STEP 3: Poisson Surface Reconstruction
-    # --------------------------------------------------------
-    print(f"\n{'='*50}")
+    print(f"\n{'-'*50}")
     print(f"STEP 3: Poisson Reconstruction")
-    print(f"{'='*50}")
     print(f"  Normal K     : {normal_k}")
     print(f"  Grid sigma   : {grid_sigma}")
     print(f"  Isovalue pct : {isovalue_pct}")
@@ -334,11 +399,11 @@ def grid_to_ridge_surface(
     print(f"  Width of domain: {width * scale}")
     
 
-    print(f"\n  {'='*44}")
+    print(f"\n  {'-'*44}")
     print(f"  Final Surface:")
     print(f"  Vertices : {len(verts)}")
     print(f"  Faces    : {len(faces)}")
-    print(f"  {'='*44}\n")
+    print(f"  {'-'*44}\n")
     
     if build_obj:
         mesh = trimesh.Trimesh(vertices=verts, faces=faces)
@@ -346,46 +411,40 @@ def grid_to_ridge_surface(
         mesh.export(obj_path)
         print(f"  Exported     : {obj_path}")
 
-    if plot_surface:
-        slice_idx = shape[0] // 2
-        fig = plt.figure(figsize=(15, 5))
-        fig.suptitle(f"Step 3: Reconstructed Surface  |  isovalue_pct={isovalue_pct}, grid_sigma={grid_sigma}")
+    if plot_check:
+        shape = volume.shape
+        s_idx = slice_idx if slice_idx is not None else shape[axis] // 2
+        
+        smoothed_slice = np.take(smoothed, s_idx, axis=axis)
+        raw_ridge_slice = np.take(thin_ridge_mask, s_idx, axis=axis)
+        cleaned_slice = np.take(cleaned_mask, s_idx, axis=axis)
+        chi_slice = np.take(chi, s_idx, axis=axis)
 
-        # Panel 1: chi field + isocontour
-        ax1 = fig.add_subplot(1, 3, 1)
-        im  = ax1.imshow(chi[slice_idx], cmap='RdBu', origin='lower')
-        ax1.contour(chi[slice_idx], levels=[isovalue], colors='yellow', linewidths=1)
-        plt.colorbar(im, ax=ax1)
-        ax1.set_title("Chi field + isocontour")
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig.suptitle(f"Ridge Surface Extraction  |  field='{field}'  axis={axis}, index={s_idx}")
 
-        # Panel 2: ridge pts vs mesh cross-section
-        # grid is (Z,Y,X) → marching cubes verts are (x, y, z)
-        # imshow slice[z] shows (row=y, col=x) with origin='lower'
-        # → scatter(x, y) = scatter(verts[:,0], verts[:,1]), filter by verts[:,2] ≈ slice_idx
-        ax2 = fig.add_subplot(1, 3, 2)
-        ax2.imshow(smoothed[slice_idx], cmap='gray', origin='lower')
-        y_c, x_c = np.where(cleaned_mask[slice_idx])
-        ax2.scatter(x_c, y_c, color='lime', s=1, label='Ridge pts')
-        near = np.abs(verts[:, 2] - slice_idx) < 1.0
-        if near.sum() > 0:
-            ax2.scatter(verts[near, 0], verts[near, 1],
-                        color='red', s=1, label='Mesh verts')
-        ax2.legend(loc='upper right', markerscale=4)
-        ax2.set_title("Ridge pts vs Mesh (slice)")
+        # Panel 1: raw detected ridge
+        axes[0].imshow(smoothed_slice, cmap='gray', origin='lower')
+        r0, c0 = np.where(raw_ridge_slice)
+        axes[0].scatter(c0, r0, color='red', s=1)
+        axes[0].set_title(f"Step 1: Raw Ridge  (n={thin_ridge_mask.sum()})")
 
-        # Panel 3: 3D vertex scatter preview
-        ax3        = fig.add_subplot(1, 3, 3, projection='3d')
-        n_preview  = min(3000, len(verts))
-        sample_idx = np.random.choice(len(verts), n_preview, replace=False)
-        sv         = verts[sample_idx]
-        ax3.scatter(sv[:, 0], sv[:, 1], sv[:, 2],
-                    s=0.3, c=sv[:, 2], cmap='viridis', alpha=0.5)
-        ax3.set_title(f"3D Mesh Preview\n({len(verts)} verts, {len(faces)} faces)")
-        ax3.set_xlabel("X"); ax3.set_ylabel("Y"); ax3.set_zlabel("Z")
+        # Panel 2: cleaned ridge
+        axes[1].imshow(smoothed_slice, cmap='gray', origin='lower')
+        r1, c1 = np.where(cleaned_slice)
+        axes[1].scatter(c1, r1, color='lime', s=1)
+        axes[1].set_title(f"Step 2: Cleaned Ridge  (n={cleaned_mask.sum()}, min={min_cluster_size})")
+
+        # Panel 3: chi field + isocontour
+        im3 = axes[2].imshow(chi_slice, cmap='RdBu', origin='lower')
+        axes[2].contour(chi_slice, levels=[isovalue], colors='yellow', linewidths=1.5)
+        plt.colorbar(im3, ax=axes[2])
+        axes[2].set_title(f"Step 3: Chi Field + Isocontour\nisovalue={isovalue:.4f} (pct={isovalue_pct})")
 
         plt.tight_layout()
-        plt.savefig(f"{field}_surface.png", dpi=150)
+        plt.savefig(f"{field}_ridge_surface.png", dpi=150)
         plt.show()
-        print(f"  Saved        : {field}_surface.png")
+        print(f"  Saved        : {field}_ridge_surface.png")
+        print(f"  {'='*50}\n")
 
     return SurfaceData(vertices=verts, faces=faces)
