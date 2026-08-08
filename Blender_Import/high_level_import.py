@@ -1,107 +1,140 @@
-from .mesh_animation import setup_mesh_animation
-from ..Backend.particle_data import load_particles
-from ..Backend.save_load_npz import load
-import glob
 import os
 import bpy
-import yt
+from typing import List, Optional
 
-def resolve_file_paths(file_paths, folder_path, pattern, max_files):
-    if folder_path is not None and pattern is not None:
-        file_paths = sorted(glob.glob(os.path.join(folder_path, pattern)))
-    elif folder_path is not None and pattern is None:
-        file_paths = sorted(glob.glob(os.path.join(folder_path, "*")))
-    elif file_paths is not None:
-        if isinstance(file_paths, str):
-            file_paths = [file_paths]
-    else:
-        raise ValueError("Either input file paths or folder_path + pattern or folder_path alone.")
-      
-    if not file_paths:
-        raise ValueError("No files found with the given input")
-    
-    if max_files is not None:
-        file_paths = file_paths[:max_files]
-    
-    return file_paths
+from .mesh_animation import setup_mesh_animation
+from .volume_animation import setup_volume_animation
+from ..Backend.save_load_hdf5 import load, get_summary
 
-def load_particles_into_blender(
-    ptype: str,
-    fields=None, 
-    region=None,
-    
-    object_name: str = 'Star',
-    file_paths: str = None,
-    folder_path: str = None,
-    pattern: str = None,
-    max_files: int = None,
-    
-    obj: bpy.types.Object = None,
-    position_scale=1.0,
-    center=True
-    ):
+
+def _find_hdf5_files(data_path: str) -> List[str]:
+    return sorted(
+        f for f in os.listdir(data_path)
+        if os.path.isfile(os.path.join(data_path, f)) and f.lower().endswith((".h5", ".hdf5"))
+    )
+
+
+def _has_vdb_sequence(data_path: str) -> bool:
+    """True if `data_path` contains a flat .vdb sequence or frame_* subfolders of .vdb files."""
+    if any(f.endswith(".vdb") for f in os.listdir(data_path)):
+        return True
+
+    for d in os.listdir(data_path):
+        sub = os.path.join(data_path, d)
+        if os.path.isdir(sub) and d.startswith("frame_"):
+            if any(f.endswith(".vdb") for f in os.listdir(sub)):
+                return True
+
+    return False
+
+
+def setup_animation(
+    data_path: str,
+    object: Optional[List[str]] = None,
+    material: Optional[bpy.types.Material] = None,
+    scale=None,
+    target_size= 200,
+    center=False,
+):
     """
-    A high level function to load particle data from yt datasets and create animated particle object in Blender.
+    Scan `data_path` for animation data and set it up in Blender.
+
+    `data_path` is a folder that may contain any combination of:
+      - one or more .h5/.hdf5 files (mesh/particle/surface animation), each of
+        which may itself contain multiple objects
+      - a VDB sequence: either .vdb files directly in the folder, or frame_*
+        subfolders each containing one or more .vdb partitions per frame
+        (volume animation) -- layout is auto-detected, no flag needed
+
+    Everything found is set up; HDF5 objects and the VDB sequence (if present)
+    are independent and both get processed in the same call.
+
     Parameters
     ----------
-    ptype : str
-        Particle type name (e.g., 'stars', 'dark_matter', 'PartType0')
-    fields : list of str
-        Fields to extract (e.g., ['mass', 'temperature'])
-    region : yt object or None
-        A region (sphere, box) to subset particles
-    object_name : str
-        Name of the Blender object to create
-    file_paths : list of str or str or None
-        List of yt dataset file paths to load
-    folder_path : str or None  
-        Folder path to search for dataset files
-    pattern : str or None
-        Filename pattern to match within folder_path (e.g., "*.h5")
-    max_files : int or None
-        Maximum number of files to load
-    obj : bpy.types.Object or None
-        Existing Blender object to use for particle mesh
-    position_scale : float
-        Scale factor for particle positions
-    center : bool
-        Whether to subtract center-of-mass per frame
-    
+    data_path : str
+        Folder containing the animation data described above.
+    object : list of str, optional
+        [HDF5] Restrict loading to these object names, applied across
+        every HDF5 file found. Default: load every object in every file.
+        [VDB] Used as a prefix for every created volume object.
+    material : bpy.types.Material, optional
+        Applied to every created object. Compulsory for VDB sequence, optional for HDF5.
+    scale, target_size, center :
+        [HDF5 only] Forwarded to `setup_mesh_animation` for every object.
+
     Returns
     -------
-    frames_data : list of dict
-        List of particle data per frame, each as output of particle_data:
-        particle_data = dict
+    dict
         {
-            "positions": np.ndarray (N,3),
-            "fields": {field_name: np.ndarray},
-            "time": dataset time in code units
-            "units": {"length": (numerical value, unit), "mass": ..., "time": ...}
+            "mesh": {object_name: bpy.types.Object, ...},
+            "volume": bool,   # True if a VDB sequence was found and set up
         }
     """
+    if not os.path.isdir(data_path):
+        raise FileNotFoundError(f"Path does not exist or is not a folder: {data_path}")
 
-    file_paths = resolve_file_paths(file_paths, folder_path, pattern, max_files)
-    
-    frames_data = []
-    for fpath in file_paths:
-        data = yt.load(fpath)
-        frames_data.append(load_particles(data, ptype=ptype, fields = fields, region=region))
+    hdf5_files = _find_hdf5_files(data_path)
+    has_vdb = _has_vdb_sequence(data_path)
+
+    if not hdf5_files and not has_vdb:
+        raise ValueError(f"No .h5/.hdf5 files or .vdb sequence found under: {data_path}")
+
+    print(f"\n{'='*50}")
+    print(f"Scanning animation data: {data_path}")
+    if hdf5_files:
+        print(f"  HDF5 files found: {hdf5_files}")
+        print(f"  HDF5 summary:")
+        for hdf5_file in hdf5_files:
+            file_path = os.path.join(data_path, hdf5_file)
+            summary = get_summary(file_path)
+            print(f"    {hdf5_file}:")
+            for object_name, object_summary in summary.items():
+                print(f"      {object_name}: {object_summary}")
+    if has_vdb:
+        print(f"  VDB sequence found: {has_vdb}")
+    print(f"{'='*50}")
+
+    results = {"mesh": {}, "volume": False}
+
+    # --- HDF5 -> mesh/particle/surface animation ---
+    for hdf5_file in hdf5_files:
+        file_path = os.path.join(data_path, hdf5_file)
+        data = load(file_path, object_names=object)
+
+        if scale is None and target_size is not None:
+            max_size = max(
+                max(frame.vertices.max(axis=0) - frame.vertices.min(axis=0))
+                for frames in data.values()
+                for frame in frames
+            )
+            scale = target_size / max_size if max_size > 0 else 1.0
+            print(f"Auto-calculated scale factor: {scale} (target size: {target_size}, max object size after scale: {max_size*scale})")
         
-    setup_mesh_animation(frames_data = frames_data, object_name = object_name, obj= obj, position_scale = position_scale, center = center)
-    
-    return frames_data
-
-def load_npz_into_blender(
-    file_path: str,
-    position_scale=1.0,
-    center = True
-):
-    data = load(file_path)
-    for obj_name, frames_data in {**data["Particles"], **data["Surface"]}.items():
-        setup_mesh_animation(frames_data=frames_data, object_name=obj_name, position_scale=position_scale, center=center)
-    for obj_name, frames_data in data["Volume"].items():
-        continue 
-    
-
-
+        elif scale is not None:
+            print(f"Using provided scale factor: {scale}")  ## Ignore target_size if scale is provided to ensure same scale for different object
         
+        
+        for object_name, frames_data in data.items():
+            if object_name in results["mesh"]:
+                print(f"  Warning: object '{object_name}' already set up from another HDF5 file; overwriting.")
+
+            obj = setup_mesh_animation(
+                frames_data,
+                object=object_name,
+                scale=scale,
+                target_size=None,  # Already applied to scale above
+                center=center,
+                material=material,
+            )
+            results["mesh"][object_name] = obj
+
+    # --- VDB -> volume animation ---
+    if has_vdb:
+        setup_volume_animation(
+            data_path,
+            object = object_name[0] if object_name else "Volume",
+            material=material,
+        )
+        results["volume"] = True
+
+    return results

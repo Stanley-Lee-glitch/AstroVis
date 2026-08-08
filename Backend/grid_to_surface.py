@@ -9,66 +9,6 @@ from .volume_data import GridBlock
 from .surface_data import SurfaceData
 from typing import Union, List, Dict
 
-def preview_field_slice(
-    grid_data : GridBlock,
-    fields    : Union[str, List[str]] = None,
-    axis      : int = 0,
-    slice_idx : int = None,
-):
-    """
-    Quick look at one or more fields before choosing an extraction method.
-
-    - A field with a clean, single-mode threshold in its histogram and a
-      blob-like slice -> grid_to_surface (isosurface) is usually enough.
-    - A field with filamentary / ridge-like structure and no clean single
-      threshold -> grid_to_ridge_surface is usually better.
-
-    Parameters
-    ----------
-    grid_data : GridBlock
-    fields    : str or list[str] or None
-        Field name(s) to preview. If None, previews every field in grid_data.fields.
-    axis      : int   axis_map = {'z': 0, 'y': 1, 'x': 2} (default: 'z')
-    slice_idx : int   Index along `axis` for plot (default: middle of that axis)
-    """
-    if fields is None:
-        fields = list(grid_data.fields.keys())
-    elif isinstance(fields, str):
-        fields = [fields]
-
-    valid_fields = [f for f in fields if f in grid_data.fields]
-    for f in fields:
-        if f not in grid_data.fields:
-            print(f"  [WARNING] Field '{f}' not found in grid_data.fields; skipping.")
-
-    if not valid_fields:
-        print("  [WARNING] No valid fields to preview.")
-        return
-
-    n = len(valid_fields)
-    fig, axes = plt.subplots(n, 2, figsize=(12, 5 * n), squeeze=False)
-    fig.suptitle(f"Field Preview  |  axis={axis}")
-
-    for row, field in enumerate(valid_fields):
-        volume = grid_data.fields[field]
-        s_idx = slice_idx if slice_idx is not None else volume.shape[axis] // 2
-        slice_2d = np.take(volume, s_idx, axis=axis)
-
-        im = axes[row, 0].imshow(slice_2d, cmap='viridis', origin='lower')
-        axes[row, 0].set_title(f"'{field}'  |  index={s_idx}")
-        plt.colorbar(im, ax=axes[row, 0])
-
-        axes[row, 1].hist(volume.ravel(), bins=100, color='steelblue')
-        axes[row, 1].set_yscale('log')
-        axes[row, 1].set_title(f"'{field}' value distribution")
-        axes[row, 1].set_xlabel(field)
-        axes[row, 1].set_ylabel("Voxel count (log)")
-
-    plt.tight_layout()
-    plt.savefig(f"preview.png", dpi=150)
-    plt.show()
-    print(f"  Saved: preview.png")
-
 # Method 1: Isosurface Extraction
 
 def grid_to_surface(

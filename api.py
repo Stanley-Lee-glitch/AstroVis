@@ -5,6 +5,7 @@ from .Backend.particle_data import (
 )
 
 from .Backend.volume_data import (
+    preview_field_slice,
     load_volume,
     GridBlock,
     GridLevel,
@@ -18,7 +19,6 @@ from .Backend.sph_particle_to_grid import (
 from .Backend.surface_data import SurfaceData
 
 from .Backend.grid_to_surface import (
-    preview_field_slice,
     grid_to_surface,
     grid_to_surfaces,
     grid_to_ridge_surface
@@ -39,9 +39,7 @@ from .Backend.save_load_hdf5 import (
 
 
 from .Blender_Import.high_level_import import (
-    resolve_file_paths,
-    load_particles_into_blender,
-    load_npz_into_blender
+    setup_animation,
 )
 
 from .Blender_Import.mesh_animation import (
@@ -68,9 +66,10 @@ from .Blender_Effect.node import (
     sph_point_to_mesh,
     select
 )
-from .Blender_Effect.shading import (
-    create_volume_shaders,
-    create_mesh_shaders,
-    create_multiple_grid_shader,
-    create_volume_field_shader
+from .Blender_Effect.material import (
+    create_volume_materials,
+    create_mesh_materials,
+    create_combined_grid_material,
+    create_field_volume_material,
+    create_transparent_mesh_materials
 )
