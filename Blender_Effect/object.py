@@ -45,7 +45,8 @@ def create_object(obj_name):
     
     return obj
 
-def set_object_shader(obj, shader_name = None):
+def set_object_shader(obj: bpy.types.Object | str, 
+                      shader_name = None):
     """
     Set the shader type of an object. If shader_name is None, try to find a material containing the object's name.
     """
@@ -67,7 +68,7 @@ def set_object_shader(obj, shader_name = None):
         
     else:
         trial = [m for m in bpy.data.materials if obj.name in m.name]
-        print(trial)
+        print("All matching materials:", [m.name for m in trial], "for object:", obj.name, "Applied the first one.")
         mat = trial[0]
         
         if mat is None:

@@ -175,13 +175,9 @@ def load(file_path, object_names=None):
     Returns
     -------
     dict
-        {
-            "Particles": {object_name: [SPHParticleData, ...]},
-            "Volume":    {object_name: [FieldHierarchy,  ...]},
-            "Surface":   {object_name: [SurfaceData,     ...]},
-        }
+        {object_name: [FieldHierarchy, ...] | [SPHParticleData, ...] | [SurfaceData, ...]}
     """
-    result = {"Particles": {}, "Volume": {}, "Surface": {}}
+    result = {}
 
     with h5py.File(file_path, "r") as f:
         names = object_names if object_names is not None else list(f.keys())
@@ -254,7 +250,7 @@ def load(file_path, object_names=None):
                     )
                     frames_out.append(surface)
 
-            result[obj_type][obj_name] = frames_out
+            result[obj_name] = frames_out
 
     return result
 

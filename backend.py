@@ -5,6 +5,7 @@ from .Backend.particle_data import (
 )
 
 from .Backend.volume_data import (
+    preview_field_slice,
     load_volume,
     GridBlock,
     GridLevel,
@@ -18,7 +19,6 @@ from .Backend.sph_particle_to_grid import (
 )
 
 from .Backend.grid_to_surface import (
-    preview_field_slice,
     grid_to_surface,
     grid_to_surfaces,
     grid_to_ridge_surface
