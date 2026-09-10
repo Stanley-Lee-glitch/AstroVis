@@ -487,7 +487,7 @@ def create_field_volume_material(
     emission_multiplier: float = 0.1,
     cmap_name: str = "viridis",
     apply: bool = True,
-) -> dict[str, tuple]:
+    ) -> dict[str, bpy.types.Material]:
     """
     Create volume material(s) driven by a field value using a matplotlib colormap.
 
@@ -501,7 +501,7 @@ def create_field_volume_material(
         apply:                 if True, apply each material directly to the matching object
 
     Returns:
-        dict: {species_name: (bpy_material, applied)}
+        dict: {species_name: bpy_material}
     """
     species_names = _normalize_species_names(species_names)
 
@@ -535,6 +535,7 @@ def create_field_volume_material(
         # Links
         nt.links.new(attr_node.outputs["Fac"],    map_range_node.inputs["Value"])
         nt.links.new(map_range_node.outputs["Result"], ramp_node.inputs["Fac"])
+        nt.links.new(map_range_node.outputs["Result"], volume_node.inputs["Density"])
         nt.links.new(map_range_node.outputs["Result"], math_node.inputs[0])
         nt.links.new(math_node.outputs[0],        volume_node.inputs["Emission Strength"])
         nt.links.new(ramp_node.outputs["Color"],  volume_node.inputs["Emission Color"])
@@ -542,7 +543,7 @@ def create_field_volume_material(
 
         print(f"Created field volume material '{mat.name}' for species '{species_name}'.")
         applied = _apply_material_to_object(species_name, mat) if apply else None
-        materials[species_name] = (mat, applied)
+        materials[species_name] = mat
 
     print("=" * 50)
 

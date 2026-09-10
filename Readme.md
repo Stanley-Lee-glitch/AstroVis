@@ -38,9 +38,10 @@ AstroVis is structured into four distinct layers, separating scientific data pro
 2.  **Install Dependencies**
     AstroVis relies on several scientific Python libraries. These can be installed in your preferred Python environment.
     ```bash
-    pip install yt numpy numba scikit-image trimesh pyopenvdb
+    pip install yt numpy numba scikit-image trimesh
+    conda install -c conda-forge openvdb
     ```
-    *Note: `pyopenvdb` requires Python 3.8 or compatible versions.*
+    *Note: AstroVis targets Python 3.11 with `openvdb` as the supported VDB backend.*
 
 3.  **Setup in Blender**
     To use the full framework, make the `AstroVis` modules available to Blender's internal Python environment. The simplest way is to add the cloned repository's path to Blender's script paths:

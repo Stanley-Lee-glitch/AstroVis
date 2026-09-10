@@ -1,0 +1,3765 @@
+===== FILE: Backend/grid_to_surface.py =====
+from skimage import measure
+from skimage.measure import marching_cubes
+import trimesh
+import numpy as np
+from scipy import ndimage
+from scipy.spatial import cKDTree
+import matplotlib.pyplot as plt
+from .volume_data import GridBlock
+from .surface_data import SurfaceData
+from typing import Union, List, Dict
+
+# Method 1: Isosurface Extraction
+
+def grid_to_surface(
+    grid_data   : GridBlock,
+    threshold   : float,
+    field       : str = None,
+    # --- Parameters of surface ---
+    build_obj   : bool = False,
+    center      : bool = True,
+    scale       : float = 1.0,
+    # --- Plotting Check ---
+    plot_surface: bool = True,
+    axis        : int  = 0,
+    slice_idx   : int  = None,
+) -> SurfaceData:
+    """
+    Extract an isosurface from a single 3D grid field using marching cubes.
+    """
+    if field is None:
+        field = list(grid_data.fields.keys())[0] if len(grid_data.fields) == 1 else "density"
+
+    print(f"\n{'='*50}")
+    print(f"Running Isosurface Extraction for field {field} at threshold {threshold}...")
+    print(f"{'-'*50}")
+
+    dx = 1 / grid_data.dims[0]
+    dy = 1 / grid_data.dims[1]
+    dz = 1 / grid_data.dims[2]
+
+    try:
+        verts, faces, normals, _ = measure.marching_cubes(
+            volume  = grid_data.fields[field],
+            level   = threshold,
+            spacing = (dx, dy, dz)
+        )
+    except ValueError as e:
+        print(f"  [WARNING] marching_cubes failed for {field}: {e}")
+        return None
+
+    print(f"  Vertices  : {len(verts)}")
+    print(f"  Faces     : {len(faces)}")
+
+    scale_factor = np.array([grid_data.right_edge[0] - grid_data.left_edge[0],
+                              grid_data.right_edge[1] - grid_data.left_edge[1],
+                              grid_data.right_edge[2] - grid_data.left_edge[2]]) * scale
+    verts *= scale_factor
+    print(f"  Width of domain: {scale_factor}")
+
+    if center:
+        center_of_mass = verts.mean(axis=0)
+        verts -= center_of_mass
+        print(f"  Mesh is relocated at centered.")
+        print(f"  Left edge: {grid_data.left_edge - center_of_mass}, Right edge: {grid_data.right_edge - center_of_mass}")
+    else:
+        print(f"  Left edge: {grid_data.left_edge}, Right edge: {grid_data.right_edge}")
+
+    if build_obj:
+        obj_path = f"{field}_surface.obj"
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces, vertex_normals=normals)
+        mesh.export(obj_path)
+        print(f"  Exported  : {obj_path}")
+
+    if plot_surface:
+        field_volume = grid_data.fields[field]
+        s_idx = slice_idx if slice_idx is not None else field_volume.shape[axis] // 2
+        slice_2d = np.take(field_volume, s_idx, axis=axis)
+
+        fig, ax = plt.subplots(figsize=(6, 6))
+        im = ax.imshow(slice_2d, cmap='viridis', origin='lower')
+        ax.contour(slice_2d, levels=[threshold], colors='red', linewidths=1.5)
+        plt.colorbar(im, ax=ax)
+        ax.set_title(f"Isosurface Extraction  |  field='{field}'  index={s_idx}\nthreshold={threshold}")
+        plt.tight_layout()
+        plt.savefig(f"{field}_isosurface.png", dpi=150)
+        plt.show()
+        print(f"  Saved        : {field}_isosurface.png")
+
+    print(f"{'='*50}\n")
+    return SurfaceData(vertices=verts, faces=faces, normals=normals)
+
+
+def grid_to_surfaces(
+    grid_data : GridBlock,
+    threshold : float,
+    fields    : Union[str, List[str]] = None,
+    **kwargs,
+) -> Dict[str, SurfaceData]:
+    """
+    Run grid_to_surface across multiple fields. Extra keyword arguments are
+    passed through to grid_to_surface for every field (e.g. build_obj, center,
+    scale, plot_surface, axis, slice_idx).
+
+    Parameters
+    ----------
+    fields : str | list[str] | None   Field name(s) (default: all fields in grid_data)
+
+    Returns
+    -------
+    dict[str, SurfaceData]   One entry per successfully extracted field.
+                              Fields that fail marching_cubes are skipped with a warning
+                              and simply omitted from the result.
+    """
+    if fields is None:
+        fields = list(grid_data.fields.keys())
+    elif isinstance(fields, str):
+        fields = [fields]
+
+    surfaces = {}
+    for field in fields:
+        result = grid_to_surface(grid_data, threshold, field=field, **kwargs)
+        if result is not None:
+            surfaces[field] = result
+        else:
+            print(f"  [WARNING] Skipping '{field}' due to extraction failure.")
+            print(f"{'='*50}\n")
+
+    return surfaces
+
+
+# Method 2: Ridge Surface Extraction
+
+def grid_to_ridge_surface(
+    grid_data   : GridBlock,
+    field       : str  = None,
+    # --- Step 1: Ridge Detection ---
+    sigma            = 1.2,    # Gaussian smoothing. Higher = smoother, loses fine detail
+    lambda_pct       = 10,     # Percentile of l3 threshold. Higher = more surface (looser)
+    # --- Step 2: Component Filtering ---
+    min_cluster_size = 250,    # Remove components smaller than this
+    # --- Step 3: Poisson Reconstruction ---
+    normal_k         = 20,     # Neighbors for normal estimation
+    grid_sigma       = 1.5,    # Normal field smoothing
+    isovalue_pct     = 50,     # 50=median. Lower=expand surface, Higher=shrink
+    # --- Quick Checks ---
+    plot_check       = True,   # If True, plot all three diagnostic figures: raw ridge, cleaned ridge, chi+contour
+    print_components = True,   # Print component size table after filtering
+    axis             = 0,      # Axis to slice diagnostic plots along: 'x', 'y', or 'z'
+    slice_idx        = None,   # Index along `axis` for diagnostic plots (default: middle)
+    # --- Parameter of Surface ---
+    center           = True,   # If True, center the surface at the origin
+    scale            = 1.0,    # The scale factor for the surface (from the width of GridBlock)
+    build_obj        = False,   # If True, export mesh as .obj file
+):
+    """
+    Extract a surface from a 3D volume by detecting intensity ridges.
+
+    Steps
+    -----
+    1) Ridge detection via Hessian eigenvalues + non-maximum suppression (NMS)
+    2) Connected component filtering to remove small isolated pieces
+    3) Poisson surface reconstruction via FFT to produce a smooth mesh
+
+    Parameters
+    ----------
+    grid_data        : GridBlock    The grid data containing the 3D volume
+    field            : str          The field to extract the surface from
+    sigma            : float        Gaussian smoothing before Hessian (default 1.2)
+    lambda_pct       : int          Percentile of l3 for surface threshold (default 10)
+    min_cluster_size : int          Min voxels to keep a connected component (default 250)
+    normal_k         : int          KNN neighbors for normal estimation (default 20)
+    grid_sigma       : float        Smoothing of normal vector field (default 1.5)
+    isovalue_pct     : int          Percentile of chi at ridge for isovalue (default 50)
+    scale            : float        Scale factor for the surface (default 1.0)
+    plot_check       : bool         Plot ridge detection and surface result (default True)
+    print_components : bool         Print connected component table (default True)
+    axis             : int          0 for z-axis, 1 for y-axis, 2 for x-axis (default: z)
+    slice_idx:       : int          Index along `axis` for plot  (default: middle)
+    build_obj        : bool         If True, export mesh as .obj file
+    center           : bool         If True, center the surface at the origin (default True)
+
+    """
+    if field is None:
+        field = list(grid_data.fields.keys())[0] if len(grid_data.fields) == 1 else "density"
+        
+    volume = grid_data.fields[field]
+    shape = volume.shape
+
+    # STEP 1: Ridge Detection via Hessian + NMS
+    print(f"\n{'='*50}")
+    print(f"Running Ridge Surface Extraction for field {field}...")
+    print(f"{'-'*50}")
+    print(f"STEP 1: Ridge Detection")
+    print(f"  Volume shape : {shape}")
+    print(f"  Sigma        : {sigma}")
+    print(f"  Lambda pct   : {lambda_pct}")
+
+    if volume.max() > 50:
+        volume = np.log1p(volume - volume.min())
+    smoothed = ndimage.gaussian_filter(volume, sigma=sigma)
+
+    grad_z, grad_y, grad_x = np.gradient(smoothed)
+    Izz, Izy, Izx = np.gradient(grad_z)
+    _,   Iyy, Iyx = np.gradient(grad_y)
+    _,   _,   Ixx = np.gradient(grad_x)
+
+    hessian_matrix = np.zeros((volume.size, 3, 3))
+    hessian_matrix[:, 0, 0] = Ixx.ravel()
+    hessian_matrix[:, 1, 1] = Iyy.ravel()
+    hessian_matrix[:, 2, 2] = Izz.ravel()
+    hessian_matrix[:, 0, 1] = hessian_matrix[:, 1, 0] = Iyx.ravel()
+    hessian_matrix[:, 0, 2] = hessian_matrix[:, 2, 0] = Izx.ravel()
+    hessian_matrix[:, 1, 2] = hessian_matrix[:, 2, 1] = Izy.ravel()
+
+    eigvals, eigvecs = np.linalg.eigh(hessian_matrix)
+    l3 = eigvals[:, 0].reshape(shape)
+    l2 = eigvals[:, 1].reshape(shape)
+    v3 = eigvecs[:, :, 0].reshape((*shape, 3))
+
+    lambda_th = np.percentile(l3, lambda_pct)
+    print(f"  Threshold l3 : {lambda_th:.6f}  (percentile {lambda_pct})")
+
+    wide_surface_zone = (l3 < lambda_th) & (l3 < l2)
+    print(f"  Wide zone    : {wide_surface_zone.sum()} / {volume.size} voxels")
+
+    thin_ridge_mask = np.zeros_like(volume, dtype=bool)
+    z_indices, y_indices, x_indices = np.where(wide_surface_zone)
+
+    for z, y, x in zip(z_indices, y_indices, x_indices):
+        if (z == 0 or z == shape[0]-1 or
+            y == 0 or y == shape[1]-1 or
+            x == 0 or x == shape[2]-1):
+            continue
+        normal = v3[z, y, x]
+        step   = np.round(normal).astype(int)
+        if np.all(step == 0):
+            ax       = np.argmax(np.abs(normal))
+            step[ax] = 1 if normal[ax] > 0 else -1
+        dz, dy, dx   = step
+        val_center   = smoothed[z,      y,      x     ]
+        val_forward  = smoothed[z + dz, y + dy, x + dx]
+        val_backward = smoothed[z - dz, y - dy, x - dx]
+        if val_center >= val_forward and val_center >= val_backward:
+            thin_ridge_mask[z, y, x] = True
+
+    print(f"  Ridge voxels : {thin_ridge_mask.sum()}  (after NMS)")
+
+    # STEP 2: Connected Component Filtering
+    print(f"\n{'-'*50}")
+    print(f"STEP 2: Component Filtering")
+    print(f"  Min cluster size : {min_cluster_size}")
+
+    struct = ndimage.generate_binary_structure(3, 3)
+    labeled, num_features = ndimage.label(thin_ridge_mask, structure=struct)
+    component_sizes = np.bincount(labeled.ravel())
+    sorted_sizes    = np.sort(component_sizes[1:])[::-1]
+
+    if print_components:
+        print(f"  Total components : {num_features}")
+        print(f"\n  {'Rank':>4}  {'Size (voxels)':>14}  {'Kept?':>6}")
+        print(f"  {'-'*30}")
+        for i, s in enumerate(sorted_sizes[:30]):
+            kept = "YES" if s >= min_cluster_size else "no"
+            print(f"  #{i+1:>3}  {s:>14}  {kept:>6}")
+        if len(sorted_sizes) > 30:
+            print(f"  ... ({len(sorted_sizes)-30} more, all smaller than #{30})")
+
+    large_components    = component_sizes >= min_cluster_size
+    large_components[0] = False
+    cleaned_mask        = large_components[labeled]
+    n_kept              = int(large_components[1:].sum())
+
+    print(f"\n  Components kept  : {n_kept} / {num_features}")
+    print(f"  Voxels           : {thin_ridge_mask.sum()} → {cleaned_mask.sum()}")
+
+    # STEP 3: Poisson Surface Reconstruction
+    print(f"\n{'-'*50}")
+    print(f"STEP 3: Poisson Reconstruction")
+    print(f"  Normal K     : {normal_k}")
+    print(f"  Grid sigma   : {grid_sigma}")
+    print(f"  Isovalue pct : {isovalue_pct}")
+
+    z_pts, y_pts, x_pts = np.where(cleaned_mask)
+    points = np.column_stack([x_pts, y_pts, z_pts]).astype(np.float32)
+    print(f"  Ridge points : {len(points)}")
+
+    tree      = cKDTree(points)
+    _, idx    = tree.query(points, k=normal_k)
+    neighbors = points[idx]
+    centered  = neighbors - neighbors.mean(axis=1, keepdims=True)
+    cov       = np.einsum('nki,nkj->nij', centered, centered)
+    _, eigvecs = np.linalg.eigh(cov)
+    normals   = eigvecs[:, :, 0].astype(np.float32)
+
+    outward   = points - points.mean(axis=0)
+    flip_mask = np.einsum('ni,ni->n', normals, outward) < 0
+    normals[flip_mask] *= -1
+    print(f"  Normals      : computed")
+
+    xi, yi, zi = x_pts.astype(int), y_pts.astype(int), z_pts.astype(int)
+    nx_grid = np.zeros(shape, dtype=np.float32)
+    ny_grid = np.zeros(shape, dtype=np.float32)
+    nz_grid = np.zeros(shape, dtype=np.float32)
+    np.add.at(nx_grid, (zi, yi, xi), normals[:, 0])
+    np.add.at(ny_grid, (zi, yi, xi), normals[:, 1])
+    np.add.at(nz_grid, (zi, yi, xi), normals[:, 2])
+    nx_grid = ndimage.gaussian_filter(nx_grid, sigma=grid_sigma)
+    ny_grid = ndimage.gaussian_filter(ny_grid, sigma=grid_sigma)
+    nz_grid = ndimage.gaussian_filter(nz_grid, sigma=grid_sigma)
+    print(f"  Normal field : splatted")
+
+    divergence = (np.gradient(nx_grid, axis=2) +
+                  np.gradient(ny_grid, axis=1) +
+                  np.gradient(nz_grid, axis=0))
+
+    div_fft          = np.fft.fftn(divergence)
+    kx               = np.fft.fftfreq(shape[2]) * 2 * np.pi
+    ky               = np.fft.fftfreq(shape[1]) * 2 * np.pi
+    kz               = np.fft.fftfreq(shape[0]) * 2 * np.pi
+    KZ, KY, KX       = np.meshgrid(kz, ky, kx, indexing='ij')
+    lap_eig          = -(KX**2 + KY**2 + KZ**2)
+    lap_eig[0, 0, 0] = 1.0
+    chi_fft          = div_fft / lap_eig
+    chi_fft[0, 0, 0] = 0.0
+    chi              = np.real(np.fft.ifftn(chi_fft)).astype(np.float32)
+    print(f"  Poisson      : solved, chi range [{chi.min():.4f}, {chi.max():.4f}]")
+
+    isovalue = np.percentile(chi[zi, yi, xi], isovalue_pct)
+    print(f"  Isovalue     : {isovalue:.6f}  (percentile {isovalue_pct})")
+
+    verts, faces, _, _ = marching_cubes(chi, level=isovalue)
+    
+    if center:
+        verts -= verts.mean(axis=0)
+        print(f"  Mesh is relocated at centered.")
+    
+    width = np.array(grid_data.right_edge) - np.array(grid_data.left_edge)
+    verts *= width * scale / np.array(shape)
+    print(f"  Width of domain: {width * scale}")
+    
+
+    print(f"\n  {'-'*44}")
+    print(f"  Final Surface:")
+    print(f"  Vertices : {len(verts)}")
+    print(f"  Faces    : {len(faces)}")
+    print(f"  {'-'*44}\n")
+    
+    if build_obj:
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        obj_path = f"{field}_surface.obj"
+        mesh.export(obj_path)
+        print(f"  Exported     : {obj_path}")
+
+    if plot_check:
+        shape = volume.shape
+        s_idx = slice_idx if slice_idx is not None else shape[axis] // 2
+        
+        smoothed_slice = np.take(smoothed, s_idx, axis=axis)
+        raw_ridge_slice = np.take(thin_ridge_mask, s_idx, axis=axis)
+        cleaned_slice = np.take(cleaned_mask, s_idx, axis=axis)
+        chi_slice = np.take(chi, s_idx, axis=axis)
+
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig.suptitle(f"Ridge Surface Extraction  |  field='{field}'  axis={axis}, index={s_idx}")
+
+        # Panel 1: raw detected ridge
+        axes[0].imshow(smoothed_slice, cmap='gray', origin='lower')
+        r0, c0 = np.where(raw_ridge_slice)
+        axes[0].scatter(c0, r0, color='red', s=1)
+        axes[0].set_title(f"Step 1: Raw Ridge  (n={thin_ridge_mask.sum()})")
+
+        # Panel 2: cleaned ridge
+        axes[1].imshow(smoothed_slice, cmap='gray', origin='lower')
+        r1, c1 = np.where(cleaned_slice)
+        axes[1].scatter(c1, r1, color='lime', s=1)
+        axes[1].set_title(f"Step 2: Cleaned Ridge  (n={cleaned_mask.sum()}, min={min_cluster_size})")
+
+        # Panel 3: chi field + isocontour
+        im3 = axes[2].imshow(chi_slice, cmap='RdBu', origin='lower')
+        axes[2].contour(chi_slice, levels=[isovalue], colors='yellow', linewidths=1.5)
+        plt.colorbar(im3, ax=axes[2])
+        axes[2].set_title(f"Step 3: Chi Field + Isocontour\nisovalue={isovalue:.4f} (pct={isovalue_pct})")
+
+        plt.tight_layout()
+        plt.savefig(f"{field}_ridge_surface.png", dpi=150)
+        plt.show()
+        print(f"  Saved        : {field}_ridge_surface.png")
+        print(f"  {'='*50}\n")
+
+    return SurfaceData(vertices=verts, faces=faces)
+
+===== FILE: Backend/grid_to_vdb.py =====
+import numpy as np
+import openvdb as vdb
+from .volume_data import FieldHierarchy, GridLevel, GridBlock
+
+def grid_to_vdb(
+    grid_data: GridBlock,
+    field: str = "density",
+    scale: float = 1.0,
+    file_path: str = None,
+    log: bool = True
+):
+    density_grid = np.array(grid_data.fields[field].astype(np.float32))  # Ensure data is in float32 format for VDB
+    
+    if log:
+        density_grid = np.log10(np.clip(density_grid, a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+    
+    dim = np.array(grid_data.dims) - np.array([1, 1, 1])  
+    dx, dy, dz = (np.array(grid_data.right_edge) -np.array(grid_data.left_edge)) / dim
+    (x_min, y_min, z_min) = np.array(grid_data.left_edge)
+    
+    print(f"Block {grid_data.block_id}: dx={dx:.4f}, dy={dy:.4f}, dz={dz:.4f}, x_min={x_min:.4f}, y_min={y_min:.4f}, z_min={z_min:.4f}")
+
+    
+    density = vdb.FloatGrid()
+    density.gridClass = vdb.GridClass.FOG_VOLUME
+    density.name = 'density'
+  
+    matrix = np.array([
+        [scale * dx, 0.0, 0.0, 0],
+        [0.0, scale * dy, 0.0, 0],
+        [0.0, 0.0, scale * dz, 0],
+        [x_min*scale, y_min*scale, z_min*scale, 1.0]
+    ], dtype=np.float64)
+
+    # Create transform from matrix
+    density.transform = vdb.createLinearTransform(matrix)
+    density.copyFromArray(density_grid)
+
+    # 4. Export to VDB file
+    if file_path is not None:
+        file_name = f"{file_path}.vdb"
+    else:
+        file_name = f"Block_{grid_data.block_id}.vdb"
+        
+    vdb.write(file_name, grids=[density])
+    
+## One vdb with all grids for each frame
+def hierarchy_to_vdb(
+    hierarchy: FieldHierarchy,
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0,
+    log: bool = True
+):
+
+    grids_to_save = []
+
+    for level_id, level in hierarchy.levels.items():
+        
+        for block_data in level.blocks:
+            
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
+                continue
+            
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
+            density_grid = block_data.fields[field]
+    
+            dim = np.array(block_data.dims) - np.array([1, 1, 1])  
+            dx, dy, dz = (block_data.right_edge - block_data.left_edge) / dim
+            (x_min, y_min, z_min) = block_data.left_edge
+            
+            density = vdb.FloatGrid()
+            density.gridClass = vdb.GridClass.FOG_VOLUME
+            density.name = f'density_l{level_id}_b{block_data.block_id}'       
+    
+            matrix = np.array([
+                [scale * dx, 0.0, 0.0, 0],
+                [0.0, scale * dy, 0.0, 0],
+                [0.0, 0.0, scale * dz, 0],
+                [x_min*scale, y_min*scale, z_min*scale, 1.0]
+            ], dtype=np.float64)
+
+            # Create transform from matrix
+            density.transform = vdb.createLinearTransform(matrix)
+            density.copyFromArray(density_grid)
+            
+            grids_to_save.append(density)
+            
+    file_name = f"{file_name_prefix}.vdb"
+    vdb.write(file_name, grids=grids_to_save)
+
+## Multiple VDBs for each frame
+def hierarchy_to_multiple_vdbs(
+    hierarchy: FieldHierarchy,
+    field: str = 'density',
+    file_name_prefix: str = "volume",
+    scale: float = 1.0,
+    log: bool = True
+):
+    
+    print(f"{'='*50}")
+    if log:
+        print("Applying log scale to the data.")
+    
+    global_min = float('inf')
+    global_max = float('-inf')
+    
+    for level_id, level in hierarchy.levels.items():
+        for block_data in level.blocks:
+            if field not in block_data.fields.keys():
+                print(f"Warning: Block {block_data.block_id} does not have field '{field}'. Skipping.")
+                continue
+            
+            if log:
+                block_data.fields[field] = np.log10(np.clip(block_data.fields[field], a_min=1e-10, a_max=None))  # Log scale and clip to avoid -inf
+                
+            global_min = min(global_min, block_data.fields[field].min())
+            global_max = max(global_max, block_data.fields[field].max())
+            
+            file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}"
+            grid_to_vdb(block_data, field=field, scale=scale, file_path=file_name, log=False)
+    
+    print(f"GLOBAL RANGE: Min: {global_min:.4f}, Max: {global_max:.4f}")
+    print(f"Finished exporting {len(hierarchy.levels)} levels with a total of {sum(len(level.blocks) for level in hierarchy.levels.values())} blocks to VDB files.")
+    
+    
+
+===== FILE: Backend/__init__.py =====
+
+
+===== FILE: Backend/particle_data.py =====
+# SPH particle data structures and loading functions for yt datasets.
+
+import numpy as np
+from dataclasses import dataclass, field
+from typing import List, Dict, Union, Callable, Tuple
+
+@dataclass
+class SPHFields:
+    data: Dict[str, np.ndarray] = field(default_factory=dict)
+
+    def __getitem__(self, key: str) -> np.ndarray:
+        """Access fields using dictionary-style indexing."""
+        try:
+            return self.data[key]
+        except KeyError:
+            raise KeyError(f"Field '{key}' not found in SPH fields.")
+
+    def __getattr__(self, key: str) -> np.ndarray:
+        """Access fields using attribute-style, e.g., fields.rho"""
+        # Only intercept keys that exist in data
+        if key in self.data:
+            return self.data[key]
+        # Otherwise, let normal attribute lookup raise AttributeError
+        raise AttributeError(f"SPHFields has no attribute '{key}'")
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.data
+
+    # Safe methods for dictionary-like operations
+    def keys(self):
+        """Return all field names."""
+        return self.data.keys()
+
+    def items(self):
+        """Return all (key, value) pairs."""
+        return self.data.items()
+    
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHFields object with fields filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        filtered_data = {name: arr[mask] for name, arr in self.data.items()}
+        return SPHFields(data=filtered_data)
+
+    
+@dataclass
+class SPHParticleData:
+    coordinates: np.ndarray          # (N, 3)
+    smoothing_lengths: np.ndarray    # (N,)
+    masses: np.ndarray              # (N,)
+    densities: np.ndarray           # (N,)
+    fields: SPHFields
+    time: float
+    units: Dict[str, object] = field(default_factory=dict)
+    left_edge: np.ndarray = None
+    right_edge: np.ndarray = None
+
+    @property
+    def N(self) -> int:
+        return self.coordinates.shape[0]
+    
+    def __getitem__(self, key: str) -> np.ndarray:
+    # First try direct attribute (masses, densities, smoothing_lengths, etc.)
+        if hasattr(self, key):
+            return getattr(self, key)
+        # Then fall back to fields dict
+        if key in self.fields:
+            return self.fields[key]
+        raise KeyError(f"Field '{key}' not found in particle data or fields.")
+    
+    def __getattr__(self, key: str) -> np.ndarray:
+        # Look for field data
+        if "fields" in self.__dict__ and key in self.fields:
+            return self.fields[key]
+        raise AttributeError(f"'{key}' not found in particle data or fields.")
+
+    def keys(self):
+        """Return all available field names, including attributes and fields."""
+        return list(self.__dict__.keys()) + list(self.fields.keys())
+
+    def filter(self, mask: np.ndarray):
+        """
+        Return a new SPHParticleData object with particles filtered by mask.
+        
+        mask: boolean array of shape (N,)
+        """
+        if mask.dtype != bool:
+            raise ValueError("Mask must be a boolean array")
+        
+        if mask.shape[0] != self.N:
+            raise ValueError("Mask length must match number of particles")
+
+        return SPHParticleData(
+            coordinates=self.coordinates[mask],
+            masses=self.masses[mask],
+            densities=self.densities[mask],
+            smoothing_lengths=self.smoothing_lengths[mask],
+            fields=self.fields.filter(mask),
+            time=self.time,
+            units=self.units,
+            left_edge=self.left_edge,
+            right_edge=self.right_edge
+        )
+    
+    
+def load_particles(ds, 
+                   ptype="stars", 
+                   fields: Union[str, List[str], Dict[str, Callable[[], np.ndarray]]] = None, 
+                   region=None):
+    """
+    Load particle data from a yt dataset.
+
+    Parameters
+    ----------
+    ds : yt Dataset
+        The yt dataset object.
+    ptype : str
+        Particle type name (e.g., 'stars', 'dark_matter')
+    fields : str or list[str] or dict[str, Callable]
+        - str: A single field name (e.g., 'mass')
+        - list[str]: List of field names to extract (e.g., ['mass', 'temperature']),
+            ** [ptype, field] can be checked by ds.derived_field_list / ds.field_list
+        - Dict of field name to callable that returns the field array.
+            Example:
+            def custom_field():
+                ad = ds.all_data()
+                data = ad[ptype, "SomeField"].to_value()
+                return np.ascontiguousarray(data)
+            You may use generate_species_fraction_fields to create such a dict for species
+            fractions for SWIFT datasets. To combine multiple such dicts (e.g. several
+            species), merge them yourself before calling this function:
+                fields = {**O_fields, **H_fields}
+            Additional fields must be added manually to the dict by callable functions.
+    region : yt object or None
+        A region (sphere, box) to subset particles
+
+    Returns
+    -------
+    SPHParticleData
+        A structured container of particle data, including coordinates, smoothing lengths, fields, time, and units.
+    """
+    # Select all particles
+    data_source = ds.all_data() if region is None else region
+
+    # Basic SPH quantities
+    coordinates = data_source[ptype, "Coordinates"].to_value()
+
+    print(f"\n{'='*50}")
+    print(f"Loading {coordinates.shape[0]} particles of type '{ptype}'.")
+    print(f"{'-'*50}")
+        
+    if (ptype, "SmoothingLengths") in ds.field_list:
+        smoothing_lengths = data_source[ptype, 'SmoothingLengths'].to_value()
+        print(f"  SmoothingLengths field found for {smoothing_lengths.shape[0]} particles.")
+    else:
+        smoothing_lengths = np.ones(coordinates.shape[0]) * 1  
+        print("  SmoothingLengths field not found; using 1 for all particles.")
+    
+    if (ptype, "Mass") in ds.field_list:
+        masses = data_source[ptype, "Mass"].to_value()
+        print(f"  Mass field found for {masses.shape[0]} particles.")
+    else:
+        masses = np.ones(coordinates.shape[0]) * 1  
+        print("  Mass field not found; using 1 for all particles.")
+
+    if (ptype, "Densities") in ds.field_list:
+        densities = data_source[ptype, "Densities"].to_value()
+        print(f"  Densities field found for {densities.shape[0]} particles.")
+    else:
+        densities = np.ones(coordinates.shape[0]) * 1  # Default density
+        print("  Densities field not found; using 1 for all particles.")
+
+    left_edge = ds.domain_left_edge.to_value() if ds.domain_left_edge is not None else None
+    print(f"  Left edge: {left_edge}")
+    right_edge = ds.domain_right_edge.to_value() if ds.domain_right_edge is not None else None
+    print(f"  Right edge: {right_edge}")
+
+    field_data = {}
+    if fields is not None:
+        if isinstance(fields, str):
+            field_data[fields] = data_source[ptype, fields].to_value()
+            print(f"  Field '{fields}' loaded for {field_data[fields].shape[0]} particles.")
+
+        elif isinstance(fields, list):
+            for f in fields:
+                if not isinstance(f, str):
+                    raise ValueError(f"List `fields` must contain only field name strings, got {type(f)}.")
+                field_data[f] = data_source[ptype, f].to_value()
+                print(f"  Field '{f}' loaded for {field_data[f].shape[0]} particles.")
+
+        elif isinstance(fields, dict):
+            for f, func in fields.items():
+                if not callable(func):
+                    raise ValueError(f"Field '{f}' in fields dict must be a callable returning an array.")
+                field_data[f] = func()
+                print(f"  Field '{f}' loaded via callable for {field_data[f].shape[0]} particles.")
+
+        else:
+            raise ValueError(
+                "Fields parameter must be a field name (str), a list of field names, "
+                "or a dict of field name to callable."
+            )
+                    
+    sph_fields_data = SPHFields(data=field_data)
+
+    unit_dict = {
+        "length": (ds.length_unit.v, str(ds.length_unit.units)),
+        "mass": (ds.mass_unit.v, str(ds.mass_unit.units)),
+        "time": (ds.time_unit.v, str(ds.time_unit.units)),
+    }
+    
+    print(f"  Units: {unit_dict}")
+    print(f"{'='*50}")
+   
+    return SPHParticleData(
+        coordinates=coordinates,
+        smoothing_lengths=smoothing_lengths,
+        masses=masses,
+        densities=densities,
+        fields=sph_fields_data,
+        time=ds.current_time.v, 
+        units=unit_dict,
+        left_edge=left_edge,
+        right_edge=right_edge
+    )
+
+===== FILE: Backend/save_load_hdf5.py =====
+## Save/load FieldHierarchy, SPHParticleData, and SurfaceData to/from HDF5 files. 
+
+from .particle_data import SPHParticleData, SPHFields
+from .volume_data import GridBlock, GridLevel, FieldHierarchy
+from .surface_data import SurfaceData
+import numpy as np
+import h5py
+import json
+
+
+_VALID_TYPES = ("Volume", "Particles", "Surface")
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _dict_to_attr(group, key, d):
+    """Store a (possibly yt-unit-valued) dict as a JSON string attribute."""
+    safe = {k: str(v) for k, v in d.items()}
+    group.attrs[key] = json.dumps(safe)
+
+
+def _attr_to_dict(group, key):
+    return json.loads(group.attrs[key])
+
+
+def _write_fields(group, fields_dict, ds_kwargs):
+    """Write a dict of {field_name: array} as datasets inside a 'fields' subgroup."""
+    fgroup = group.create_group("fields")
+    for field_name, arr in fields_dict.items():
+        _create_dataset(fgroup, field_name, arr, ds_kwargs)
+
+
+def _read_fields(group):
+    if "fields" not in group:
+        return {}
+    fgroup = group["fields"]
+    return {name: fgroup[name][()] for name in fgroup}
+
+
+def _create_dataset(group, name, arr, ds_kwargs):
+    """create_dataset wrapper — compression only applies to non-scalar arrays."""
+    arr = np.asarray(arr)
+    if arr.ndim >= 1 and arr.size > 0:
+        group.create_dataset(name, data=arr, **ds_kwargs)
+    else:
+        group.create_dataset(name, data=arr)
+
+## Sort keys like "frame_0", "frame_1", ... by the trailing integer,
+def _sorted_by_trailing_int(keys, sep="_"):
+    return sorted(keys, key=lambda s: int(s.split(sep)[-1]))
+
+# Public API — save / load
+
+def save(file_path, data, mode="w", compression="gzip", compression_opts=4):
+    """
+    Save FieldHierarchy, SPHParticleData, and SurfaceData objects into a
+    single HDF5 file. Supports any number of named objects, each with any
+    number of frames (for animation), mixed freely across types.
+
+    Parameters
+    ----------
+    file_path : str
+    data : dict
+        Keys are object names, values are a single instance *or* a list of
+        instances (one per animation frame). Each list may only contain one
+        type: FieldHierarchy, SPHParticleData, or SurfaceData.
+    mode : str
+        h5py file mode. "w" (default) overwrites the whole file. "a" opens
+        for append/update — existing objects with the same name are replaced,
+        other objects already in the file are left untouched.
+    compression : str or None
+        Passed to h5py.create_dataset for array datasets. None disables
+        compression.
+    compression_opts : int
+        Compression level, used only when compression == "gzip".
+
+    Example
+    -------
+    save("scene.h5", {
+        "Planet_Surface": [SurfaceData, ...],
+        "Emission_Gas":   [FieldHierarchy, ...],
+        "Dust":           [SPHParticleData, ...],
+    })
+    """
+    ds_kwargs = {}
+    if compression is not None:
+        ds_kwargs["compression"] = compression
+        if compression == "gzip":
+            ds_kwargs["compression_opts"] = compression_opts
+
+    with h5py.File(file_path, mode) as f:
+        
+        ## Save for each object
+        for obj_name, frame_datas in data.items():
+            if not isinstance(frame_datas, list):
+                frame_datas = [frame_datas]
+
+            if obj_name in f:
+                del f[obj_name]  # replace any existing object of this name
+            obj_group = f.create_group(obj_name)
+
+            obj_type = None
+
+            ## Save for each frame
+            for frame_idx, item in enumerate(frame_datas):
+                frame_group = obj_group.create_group(f"frame_{frame_idx}")
+
+                # FieldHierarchy
+                if isinstance(item, FieldHierarchy):
+                    obj_type = "Volume"
+                    _dict_to_attr(frame_group, "unit", item.unit)
+                    _dict_to_attr(frame_group, "field_units", item.field_units)
+
+                    levels_group = frame_group.create_group("levels")
+                    for level_id, gridlevel in item.levels.items():
+                        lg = levels_group.create_group(f"level_{level_id}")
+                        lg.attrs["cell_size"] = np.array(gridlevel.cell_size, dtype=np.float64)
+
+                        blocks_group = lg.create_group("blocks")
+                        for block in gridlevel.blocks:
+                            bg = blocks_group.create_group(f"block_{block.block_id}")
+                            bg.attrs["left_edge"] = np.array(block.left_edge, dtype=np.float64)
+                            bg.attrs["right_edge"] = np.array(block.right_edge, dtype=np.float64)
+                            bg.attrs["dims"] = np.array(block.dims, dtype=np.int64)
+                            _write_fields(bg, block.fields, ds_kwargs)
+
+                # SPHParticleData
+                elif isinstance(item, SPHParticleData):
+                    obj_type = "Particles"
+                    _create_dataset(frame_group, "coordinates", item.coordinates, ds_kwargs)
+                    _create_dataset(frame_group, "masses", item.masses, ds_kwargs)
+                    _create_dataset(frame_group, "densities", item.densities, ds_kwargs)
+                    _create_dataset(frame_group, "smoothing_lengths", item.smoothing_lengths, ds_kwargs)
+                    frame_group.attrs["time"] = float(item.time)
+                    _dict_to_attr(frame_group, "units", item.units)
+   
+                    frame_group.attrs["left_edge"] = np.array(item.left_edge, dtype=np.float64)
+                    frame_group.attrs["right_edge"] = np.array(item.right_edge, dtype=np.float64)
+                    _write_fields(frame_group, item.fields, ds_kwargs)
+
+                # SurfaceData
+                elif isinstance(item, SurfaceData):
+                    obj_type = "Surface"
+                    _create_dataset(frame_group, "vertices", item.vertices, ds_kwargs)
+                    _create_dataset(frame_group, "faces", item.faces, ds_kwargs)
+                    if item.normals is not None:
+                        _create_dataset(frame_group, "normals", item.normals, ds_kwargs)
+
+                else:
+                    raise TypeError(
+                        f"Unsupported object type for '{obj_name}' frame {frame_idx}: "
+                        f"{type(item).__name__}"
+                    )
+
+            obj_group.attrs["type"] = obj_type
+            obj_group.attrs["frames"] = len(frame_datas)
+
+    print(f"Saved to {file_path}")
+
+
+def load(file_path, object_names=None):
+    """
+    Load FieldHierarchy, SPHParticleData, and SurfaceData from an HDF5 file
+    produced by`save`.
+
+    Parameters
+    ----------
+    file_path : str
+    object_names : list of str, optional
+        If given, only load these objects (default: load everything in the
+        file).
+
+    Returns
+    -------
+    dict
+        {object_name: [FieldHierarchy, ...] | [SPHParticleData, ...] | [SurfaceData, ...]}
+    """
+    result = {}
+
+    with h5py.File(file_path, "r") as f:
+        names = object_names if object_names is not None else list(f.keys())
+
+        # Load per object
+        for obj_name in names:
+            if obj_name not in f:
+                raise KeyError(f"Object '{obj_name}' not found in {file_path}")
+
+            obj_group = f[obj_name]
+            obj_type = obj_group.attrs["type"]
+            num_frames = int(obj_group.attrs["frames"])
+
+            if obj_type not in _VALID_TYPES:
+                raise ValueError(f"Unknown type '{obj_type}' for object '{obj_name}'")
+
+            frames_out = []
+
+            # Load per frame
+            for i in range(num_frames):
+                frame_group = obj_group[f"frame_{i}"]
+
+                if obj_type == "Volume":
+                    unit = _attr_to_dict(frame_group, "unit")
+                    field_units = _attr_to_dict(frame_group, "field_units")
+                    fh = FieldHierarchy(unit=unit, field_units=field_units)
+
+                    levels_group = frame_group["levels"]
+                    for level_key in _sorted_by_trailing_int(levels_group.keys()):
+                        level_id = int(level_key.split("_")[-1])
+                        lg = levels_group[level_key]
+                        cell_size = tuple(lg.attrs["cell_size"].tolist())
+                        fh.levels[level_id] = GridLevel(level=level_id, cell_size=cell_size)
+
+                        blocks_group = lg["blocks"]
+                        for block_key in _sorted_by_trailing_int(blocks_group.keys()):
+                            bg = blocks_group[block_key]
+                            block_id = int(block_key.split("_")[-1])
+                            block = GridBlock(
+                                block_id=block_id,
+                                left_edge=tuple(bg.attrs["left_edge"].tolist()),
+                                right_edge=tuple(bg.attrs["right_edge"].tolist()),
+                                dims=tuple(int(x) for x in bg.attrs["dims"].tolist()),
+                                fields=_read_fields(bg),
+                            )
+                            fh.levels[level_id].blocks.append(block)
+
+                    frames_out.append(fh)
+
+                elif obj_type == "Particles":
+
+                    particle_data = SPHParticleData(
+                        coordinates=frame_group["coordinates"][()],
+                        masses=frame_group["masses"][()],
+                        densities=frame_group["densities"][()],
+                        smoothing_lengths=frame_group["smoothing_lengths"][()],
+                        time=float(frame_group.attrs["time"]),
+                        fields=SPHFields(data=_read_fields(frame_group)),
+                        units=_attr_to_dict(frame_group, "units"),
+                        left_edge=np.array(frame_group.attrs["left_edge"].tolist(), dtype=np.float64),
+                        right_edge=np.array(frame_group.attrs["right_edge"].tolist(), dtype=np.float64)
+                    )
+                    frames_out.append(particle_data)
+
+                elif obj_type == "Surface":
+                    surface = SurfaceData(
+                        vertices=frame_group["vertices"][()],
+                        faces=frame_group["faces"][()],
+                        normals=frame_group["normals"][()] if "normals" in frame_group else None,
+                    )
+                    frames_out.append(surface)
+
+            result[obj_name] = frames_out
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Format inspection / validation helpers
+# ---------------------------------------------------------------------------
+
+def get_summary(file_path):
+    """
+    Return {object_name: {"Type": ..., "Frames": ...}}
+    """
+    summary = {}
+    with h5py.File(file_path, "r") as f:
+        for obj_name in f.keys():
+            obj_group = f[obj_name]
+            summary[obj_name] = {
+                "Type": obj_group.attrs.get("type", "?"),
+                "Frames": int(obj_group.attrs.get("frames", 0)),
+            }
+    return summary
+
+
+def inspect(file_path, verbose=True):
+    """
+    Print (if verbose) and return a summary of an HDF5 scene file: every
+    object, its type and frame count, plus dataset shapes/dtypes for frame 0
+    of each object.
+
+    Returns
+    -------
+    dict
+        {object_name: {"type": ..., "frames": ..., "frame_0": {...nested...}}}
+    """
+    summary = {}
+
+    def _walk(group, indent):
+        entries = {}
+        for key in group.keys():
+            item = group[key]
+            if isinstance(item, h5py.Dataset):
+                entries[key] = {"shape": item.shape, "dtype": str(item.dtype)}
+                if verbose:
+                    print(f"{indent}{key}: shape={item.shape} dtype={item.dtype}")
+            elif isinstance(item, h5py.Group):
+                if verbose:
+                    print(f"{indent}{key}/")
+                entries[key] = _walk(item, indent + "    ")
+        return entries
+
+    with h5py.File(file_path, "r") as f:
+        for obj_name in f.keys():
+            obj_group = f[obj_name]
+            obj_type = obj_group.attrs.get("type", "?")
+            num_frames = int(obj_group.attrs.get("frames", 0))
+            summary[obj_name] = {"type": obj_type, "frames": num_frames, "frame_0": {}}
+
+            if verbose:
+                print(f"[{obj_name}]  type={obj_type}  frames={num_frames}")
+
+            if num_frames > 0 and "frame_0" in obj_group:
+                summary[obj_name]["frame_0"] = _walk(obj_group["frame_0"], "    ")
+
+    return summary
+
+
+def validate(file_path, raise_on_error=False):
+    """
+    Check that an HDF5 scene file conforms to the format written by save().
+
+    Parameters
+    ----------
+    file_path : str
+    raise_on_error : bool
+        If True, raise ValueError listing all problems found instead of
+        just returning them.
+
+    Returns
+    -------
+    list of str
+        Problem descriptions.
+    """
+    problems = []
+
+    required_datasets = {
+        "Particles": ["coordinates", "masses", "densities", "smoothing_lengths"],
+        "Surface": ["vertices", "faces"],
+    }
+
+    try:
+        with h5py.File(file_path, "r") as f:
+            for obj_name in f.keys():
+                obj_group = f[obj_name]
+
+                if "type" not in obj_group.attrs:
+                    problems.append(f"{obj_name}: missing 'type' attribute")
+                    continue
+                obj_type = obj_group.attrs["type"]
+
+                if obj_type not in _VALID_TYPES:
+                    problems.append(f"{obj_name}: unknown type '{obj_type}'")
+                    continue
+
+                if "frames" not in obj_group.attrs:
+                    problems.append(f"{obj_name}: missing 'frames' attribute")
+                    continue
+                num_frames = int(obj_group.attrs["frames"])
+
+                for i in range(num_frames):
+                    frame_key = f"frame_{i}"
+                    if frame_key not in obj_group:
+                        problems.append(f"{obj_name}: missing '{frame_key}' group")
+                        continue
+                    frame_group = obj_group[frame_key]
+
+                    if obj_type == "Volume":
+                        if "unit" not in frame_group.attrs or "field_units" not in frame_group.attrs:
+                            problems.append(f"{obj_name}/{frame_key}: missing unit metadata")
+                        if "levels" not in frame_group:
+                            problems.append(f"{obj_name}/{frame_key}: missing 'levels' group")
+                            continue
+                        for level_key in frame_group["levels"].keys():
+                            lg = frame_group["levels"][level_key]
+                            if "cell_size" not in lg.attrs:
+                                problems.append(
+                                    f"{obj_name}/{frame_key}/levels/{level_key}: missing cell_size"
+                                )
+                            if "blocks" not in lg:
+                                problems.append(
+                                    f"{obj_name}/{frame_key}/levels/{level_key}: missing 'blocks' group"
+                                )
+                                continue
+                            for block_key in lg["blocks"].keys():
+                                bg = lg["blocks"][block_key]
+                                for attr in ("left_edge", "right_edge", "dims"):
+                                    if attr not in bg.attrs:
+                                        problems.append(
+                                            f"{obj_name}/{frame_key}/levels/{level_key}/"
+                                            f"{block_key}: missing '{attr}'"
+                                        )
+                    else:
+                        for req in required_datasets[obj_type]:
+                            if req not in frame_group:
+                                problems.append(f"{obj_name}/{frame_key}: missing dataset '{req}'")
+
+    except (OSError, KeyError) as exc:
+        problems.append(f"Could not open/parse file: {exc}")
+
+    if raise_on_error and problems:
+        raise ValueError("Invalid HDF5 scene file:\n" + "\n".join(problems))
+
+    return problems
+
+===== FILE: Backend/sph_particle_to_grid.py =====
+"""
+SPH kernel and scatter implementation adapted from swiftsimio
+(https://github.com/SWIFTSIM/swiftsimio).
+
+"""
+
+import numpy as np
+from numba import jit
+from .particle_data import SPHParticleData
+from .volume_data import GridBlock
+from typing import Union, List
+
+# Taken from Dehnen & Aly 2012
+kernel_gamma = 1.936492
+kernel_constant = 21.0 * 0.31830988618379067154 / 2.0
+
+
+@jit(nopython=True, fastmath=True)
+def kernel(r: Union[float, np.float32], H: Union[float, np.float32]) -> float:    
+    """
+    Kernel implementation for swiftsimio.
+
+    Parameters
+    ----------
+    r : float or np.float32
+        Distance from particle.
+
+    H : float or np.float32
+        Kernel width (i.e. radius of compact support of kernel).
+
+    Returns
+    -------
+    float
+        Contribution to density by particle at distance `r`.
+
+    Notes
+    -----
+    Swiftsimio uses the Wendland-C2 kernel as described in [1]_.
+
+    References
+    ----------
+    .. [1] Dehnen W., Aly H., 2012, MNRAS, 425, 1068
+    """
+    inverse_H = 1.0 / H
+    ratio = r * inverse_H
+
+    kernel = 0.0
+
+    if ratio < 1.0:
+        one_minus_ratio = 1.0 - ratio
+        one_minus_ratio_2 = one_minus_ratio * one_minus_ratio
+        one_minus_ratio_4 = one_minus_ratio_2 * one_minus_ratio_2
+
+        kernel = max(one_minus_ratio_4 * (1.0 + 4.0 * ratio), 0.0)
+
+        kernel *= kernel_constant * inverse_H * inverse_H * inverse_H
+
+    return kernel
+
+"""
+Basic volume render for SPH data.
+
+Takes the 3D positions of the particles and projects them onto a grid.
+"""
+
+@jit(nopython=True, fastmath=True)
+def scatter(
+    x: np.float64,
+    y: np.float64,
+    z: np.float64,
+    m: np.float32,
+    h: np.float32,
+    res: int,
+    box_x: np.float64 = 0.0,
+    box_y: np.float64 = 0.0,
+    box_z: np.float64 = 0.0,
+) -> np.ndarray:
+    """
+    Create a weighted voxel grid.
+
+    Computes contributions to a voxel grid from particles with positions
+    (`x`,`y`,`z`) with smoothing lengths `h` weighted by quantities `m`.
+    This includes periodic boundary effects.
+
+    Parameters
+    ----------
+    x : np.ndarray[np.float64]
+        Array of x-positions of the particles. Must be bounded by [0, 1].
+
+    y : np.ndarray[np.float64]
+        Array of y-positions of the particles. Must be bounded by [0, 1].
+
+    z : np.ndarray[np.float64]
+        Array of z-positions of the particles. Must be bounded by [0, 1].
+
+    m : np.ndarray[np.float32]
+        Array of masses (or otherwise weights) of the particles.
+
+    h : np.ndarray[np.float32]
+        Array of smoothing lengths of the particles.
+
+    res : int
+        The number of voxels along one axis, i.e. this returns a cube
+        of res * res * res.
+
+    box_x : np.float64
+        Box size in x, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    box_y : np.float64
+        Box size in y, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    box_z : np.float64
+        Box size in z, in the same rescaled length units as x, y and z.
+        Used for periodic wrapping.
+
+    Returns
+    -------
+    np.ndarray[np.float32, np.float32, np.float32]
+        Voxel grid of quantity.
+
+    See Also
+    --------
+    scatter_parallel
+        Parallel implementation of this function.
+
+    slice_scatter
+        Create scatter plot of a slice of data.
+
+    slice_scatter_parallel
+        Create scatter plot of a slice of data in parallel.
+
+    Notes
+    -----
+    Explicitly defining the types in this function allows for a 25-50% performance
+    improvement. In our testing, using numpy floats and integers is also an improvement
+    over using the numba np.ones.
+    """
+    # Output np.array for our image
+    image = np.zeros((res, res, res), dtype=np.float32)
+    maximal_array_index = np.int32(res) - 1
+
+    # Change that integer to a float, we know that our x, y are bounded
+    # by [0, 1].
+    float_res = np.float32(res)
+    pixel_width = 1.0 / float_res
+
+    # We need this for combining with the x_pos and y_pos variables.
+    float_res_64 = np.float64(res)
+
+    # If the kernel width is smaller than this, we drop to just PIC method
+    drop_to_single_cell = pixel_width * 0.5
+
+    # Pre-calculate this constant for use with the above
+    inverse_cell_volume = float_res * float_res * float_res
+
+    if box_x == 0.0:
+        xshift_min = 0
+        xshift_max = 1
+    else:
+        xshift_min = -1  # x_min is always at x=0
+        xshift_max = int(np.ceil(1 / box_x) + 1)  # tile the box to cover [0, 1]
+    if box_y == 0.0:
+        yshift_min = 0
+        yshift_max = 1
+    else:
+        yshift_min = -1  # y_min is always at y=0
+        yshift_max = int(np.ceil(1 / box_y) + 1)  # tile the box to cover [0, 1]
+    if box_z == 0.0:
+        zshift_min = 0
+        zshift_max = 1
+    else:
+        zshift_min = -1  # z_min is always at z=0
+        zshift_max = int(np.ceil(1 / box_z) + 1)  # tile the box to cover [0, 1]
+
+    for x_pos_original, y_pos_original, z_pos_original, mass, hsml in zip(
+        x, y, z, m, h
+    ):
+        # loop over periodic copies of the particle
+        for xshift in range(xshift_min, xshift_max):
+            for yshift in range(yshift_min, yshift_max):
+                for zshift in range(zshift_min, zshift_max):
+                    x_pos = x_pos_original + xshift * box_x
+                    y_pos = y_pos_original + yshift * box_y
+                    z_pos = z_pos_original + zshift * box_z
+
+                    # Calculate the cell that this particle; use the 64 bit version of the
+                    # resolution as this is the same type as the positions
+                    particle_cell_x = np.int32(np.floor(float_res_64 * x_pos))
+                    particle_cell_y = np.int32(np.floor(float_res_64 * y_pos))
+                    particle_cell_z = np.int32(np.floor(float_res_64 * z_pos))
+
+                    # SWIFT stores hsml as the FWHM.
+                    kernel_width = kernel_gamma * hsml
+
+                    # The number of cells that this kernel spans
+                    cells_spanned = np.int32(1.0 + kernel_width * float_res)
+
+                    if (
+                        particle_cell_x + cells_spanned < 0
+                        or particle_cell_x - cells_spanned > maximal_array_index
+                        or particle_cell_y + cells_spanned < 0
+                        or particle_cell_y - cells_spanned > maximal_array_index
+                        or particle_cell_z + cells_spanned < 0
+                        or particle_cell_z - cells_spanned > maximal_array_index
+                    ):
+                        # Can happily skip this particle
+                        continue
+
+                    if kernel_width < drop_to_single_cell:
+                        # Easygame, gg
+                        if (
+                            particle_cell_x >= 0
+                            and particle_cell_x <= maximal_array_index
+                            and particle_cell_y >= 0
+                            and particle_cell_y <= maximal_array_index
+                            and particle_cell_z >= 0
+                            and particle_cell_z <= maximal_array_index
+                        ):
+                            image[
+                                particle_cell_x, particle_cell_y, particle_cell_z
+                            ] += mass * inverse_cell_volume
+                    else:
+                        # Now we loop over the square of cells that the kernel lives in
+                        for cell_x in range(
+                            # Ensure that the lowest x value is 0, otherwise we segfault
+                            max(0, particle_cell_x - cells_spanned),
+                            # Ensure that the highest x value lies within the np.array
+                            # bounds, otherwise we'll segfault (oops).
+                            min(
+                                particle_cell_x + cells_spanned, maximal_array_index + 1
+                            ),
+                        ):
+                            # The distance in x to our new favourite cell -- remember that
+                            # our x, y are all in a box of [0, 1]; calculate the distance
+                            # to the cell centre
+                            distance_x = (
+                                np.float32(cell_x) + 0.5
+                            ) * pixel_width - np.float32(x_pos)
+                            distance_x_2 = distance_x * distance_x
+                            for cell_y in range(
+                                max(0, particle_cell_y - cells_spanned),
+                                min(
+                                    particle_cell_y + cells_spanned,
+                                    maximal_array_index + 1,
+                                ),
+                            ):
+                                distance_y = (
+                                    np.float32(cell_y) + 0.5
+                                ) * pixel_width - np.float32(y_pos)
+                                distance_y_2 = distance_y * distance_y
+                                for cell_z in range(
+                                    max(0, particle_cell_z - cells_spanned),
+                                    min(
+                                        particle_cell_z + cells_spanned,
+                                        maximal_array_index + 1,
+                                    ),
+                                ):
+                                    distance_z = (
+                                        np.float32(cell_z) + 0.5
+                                    ) * pixel_width - np.float32(z_pos)
+                                    distance_z_2 = distance_z * distance_z
+
+                                    r = np.sqrt(
+                                        distance_x_2 + distance_y_2 + distance_z_2
+                                    )
+
+                                    kernel_eval = kernel(r, kernel_width)
+
+                                    image[cell_x, cell_y, cell_z] += mass * kernel_eval
+
+    return image
+
+# Convert SPH particle data to GridBlock with center at origin and boxwidth at 1
+def sph_to_grid(
+    particle_data: SPHParticleData,
+    fields: Union[str, List[str]] = None,
+    res: int = 256,
+    intensive: bool = True,
+    center: bool = True,
+    ) -> GridBlock :
+    
+    if isinstance(fields, str):
+        fields = [fields]
+
+    if fields is None:
+        fields = list(particle_data.fields.keys())
+        if "density" not in fields:
+            fields.append("density")
+    
+    print(f"\n{'='*50}")
+    print(f"Converting SPH particle data to grid with resolution {res} and field(s) {fields}...")
+    print(f"{'-'*50}")
+    
+    boxsize = particle_data.right_edge - particle_data.left_edge
+    print(f"  Boxsize: {boxsize}")
+    
+    x = (particle_data.coordinates[:, 0] / boxsize[0]).astype(np.float64)
+    y = (particle_data.coordinates[:, 1] / boxsize[1]).astype(np.float64)
+    z = (particle_data.coordinates[:, 2] / boxsize[2]).astype(np.float64)
+    h = (particle_data.smoothing_lengths / boxsize[0]).astype(np.float32)
+
+    m_particle = particle_data.masses.astype(np.float32)
+
+    # For intensive fields, the denominator (mass/density normalization) is the
+    # same for every field, so compute it once instead of per-field.
+    if intensive:
+        rho = particle_data.densities.astype(np.float32)
+        den = scatter(x, y, z, m_particle / rho, h, res)
+        den_mask = den > 0
+
+    field_grids = {}
+    for f in fields:
+        if f == 'density':
+            attribute_grid = den
+            print(f"  Density field computed successfully.")
+        else:
+            if intensive:
+                field_values = particle_data[f].astype(np.float32)  ## Allow both attribute of SPH particle and Field Data
+                num = scatter(x, y, z, m_particle * field_values / rho, h, res)
+                attribute_grid = np.zeros_like(num)
+                attribute_grid[den_mask] = num[den_mask] / den[den_mask]
+                print(f"  Intensive field '{f}' computed successfully.")
+
+            else:
+                field_values = particle_data[f].astype(np.float32)
+                attribute_grid = scatter(x, y, z, field_values, h, res)
+                print(f"  Extensive field '{f}' computed successfully.")
+
+        field_grids[f] = attribute_grid
+
+    if center:
+        left_edge = particle_data.left_edge - boxsize / 2.0
+        right_edge = particle_data.right_edge - boxsize / 2.0
+        print(f"\n  Centering grid: left_edge={left_edge}, right_edge={right_edge}")
+    else:
+        left_edge = particle_data.left_edge
+        right_edge = particle_data.right_edge
+        print(f"\n  Grid edges: left_edge={left_edge}, right_edge={right_edge}")
+        
+    print(f"  Conversion completed successfully.")
+    print(f"{'='*50}")
+    
+    return GridBlock(
+        block_id=0,
+        left_edge=left_edge,
+        right_edge=right_edge,
+        dims=np.array([res, res, res]),
+        fields=field_grids
+    )
+
+
+===== FILE: Backend/surface_data.py =====
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass
+class SurfaceData:
+    vertices: np.ndarray       # (N,3)
+    faces: np.ndarray          # (M,3)
+    normals: np.ndarray = None # optional, (N,3)
+
+    @property
+    def N_vertices(self):
+        return self.vertices.shape[0]
+
+    @property
+    def N_faces(self):
+        return self.faces.shape[0]
+
+===== FILE: Backend/swift_species_map.py =====
+import numpy as np
+
+ELEMENT_MAP = {
+    "H": [("HI", 1), ("HII", 2), ("Hm", 3)],
+    "He": [("HeI", 4), ("HeII", 5), ("HeIII", 6)],
+    "C": [("CI", 7), ("CII", 8), ("CIII", 9), ("CIV", 10), ("CV", 11), ("CVI", 12), ("CVII", 13), ("Cm", 14)],
+    "N": [("NI", 15), ("NII", 16), ("NIII", 17), ("NIV", 18), ("NV", 19), ("NVI", 20), ("NVII", 21), ("NVIII", 22)],
+    "O": [("OI", 23), ("OII", 24), ("OIII", 25), ("OIV", 26), ("OV", 27), ("OVI", 28), ("OVII", 29), ("OVIII", 30), ("OIX", 31), ("Om", 32)],
+    "Ne": [("NeI", 33), ("NeII", 34), ("NeIII", 35), ("NeIV", 36), ("NeV", 37), ("NeVI", 38), ("NeVII", 39), ("NeVIII", 40), ("NeIX", 41), ("NeX", 42), ("NeXI", 43)],
+    "Mg": [("MgI", 44), ("MgII", 45), ("MgIII", 46), ("MgIV", 47), ("MgV", 48), ("MgVI", 49), ("MgVII", 50), ("MgVIII", 51), ("MgIX", 52), ("MgX", 53), ("MgXI", 54), ("MgXII", 55), ("MgXIII", 56)],
+    "Si": [("SiI", 57), ("SiII", 58), ("SiIII", 59), ("SiIV", 60), ("SiV", 61), ("SiVI", 62), ("SiVII", 63), ("SiVIII", 64), ("SiIX", 65), ("SiX", 66), ("SiXI", 67), ("SiXII", 68), ("SiXIII", 69), ("SiXIV", 70), ("SiXV", 71)],
+    "S": [("SI", 72), ("SII", 73), ("SIII", 74), ("SIV", 75), ("SV", 76), ("SVI", 77), ("SVII", 78), ("SVIII", 79), ("SIX", 80), ("SX", 81), ("SXI", 82), ("SXII", 83), ("SXIII", 84), ("SXIV", 85), ("SXV", 86), ("SXVI", 87), ("SXVII", 88)],
+    "Ca": [("CaI", 89), ("CaII", 90), ("CaIII", 91), ("CaIV", 92), ("CaV", 93), ("CaVI", 94), ("CaVII", 95), ("CaVIII", 96), ("CaIX", 97), ("CaX", 98), ("CaXI", 99), ("CaXII", 100), ("CaXIII", 101), ("CaXIV", 102), ("CaXV", 103), ("CaXVI", 104), ("CaXVII", 105), ("CaXVIII", 106), ("CaXIX", 107), ("CaXX", 108), ("CaXXI", 109)],
+    "Fe": [("FeI", 110), ("FeII", 111), ("FeIII", 112), ("FeIV", 113), ("FeV", 114), ("FeVI", 115), ("FeVII", 116), ("FeVIII", 117), ("FeIX", 118), ("FeX", 119), ("FeXI", 120), ("FeXII", 121), ("FeXIII", 122), ("FeXIV", 123), ("FeXV", 124), ("FeXVI", 125), ("FeXVII", 126), ("FeXVIII", 127), ("FeXIX", 128), ("FeXX", 129), ("FeXXI", 130), ("FeXXII", 131), ("FeXXIII", 132), ("FeXXIV", 133), ("FeXXV", 134), ("FeXXVI", 135), ("FeXXVII", 136)]
+}
+
+MOLECULE_MAP = {
+    "H2": 137, "H2p": 138, "H3p": 139, "OH": 140, "H2O": 141,
+    "C2": 142, "O2": 143, "HCOp": 144, "CH": 145, "CH2": 146, "CH3p": 147,
+    "CO": 148, "CHp": 149, "CH2p": 150, "OHp": 151, "H2Op": 152, "H3Op": 153,
+    "COp": 154, "HOCp": 155, "O2p": 156
+}
+
+
+
+def generate_species_fraction_fields(ds, species):
+    """
+    Automatically generate fraction getter functions for species fraction for SWIFT.
+    Returns a dict: { "<species>_fraction": getter_function }
+    """
+    ad = ds.all_data()
+    fields = {}
+
+    # --- Handle elements ---
+    if species in ELEMENT_MAP.keys():
+        indices = [idx for _, idx in ELEMENT_MAP[species]]  # all indices for this element
+        for name, idx in ELEMENT_MAP[species]:
+            def getter(idx=idx, indices=indices):
+                all_species = ad['PartType0', "SpeciesFractions"]
+                data = np.array(all_species[:, idx])
+                total = np.sum(all_species[:, indices], axis=1)
+                mask = total > 0
+                data[mask] = data[mask] / total[mask]
+                return np.ascontiguousarray(data)
+
+            fields[f"{name}_fraction"] = getter
+
+    # --- Handle molecules ---
+    elif species in MOLECULE_MAP.keys():
+        idx = MOLECULE_MAP[species]
+        def getter(idx=idx):
+            all_species = ad['PartType0', "SpeciesFractions"]
+            data = np.array(all_species[:, idx])
+            return np.ascontiguousarray(data)
+
+        fields[f"{species}_fraction"] = getter
+    
+    else:
+        print(f"Warning: Species '{species}' not found in ELEMENT_MAP or MOLECULE_MAP. Please write the callable function manually.")
+
+    return fields
+
+===== FILE: Backend/volume_data.py =====
+import numpy as np
+import matplotlib.pyplot as plt
+from dataclasses import dataclass, field
+from typing import Union, Dict, Tuple, List, Optional
+
+@dataclass
+class GridBlock:
+    """
+    A uniform rectangular grid, containing field data and metadata.
+    This is the basic unit of volume data that will be converted to VDB
+    and imported into Blender.
+    """
+    block_id: int
+    left_edge: np.ndarray   # (3,) array of floats
+    right_edge: np.ndarray  # (3,) array of floats
+    dims: np.ndarray        # (3,) array of ints
+    fields: Dict[str, np.ndarray]
+
+    def keys(self):
+        return list(self.fields.keys())
+
+
+@dataclass
+class GridLevel:
+    """
+    For AMR datasets, we group blocks by their refinement level. Each
+    level contains multiple blocks of the same cell size. It may or may
+    not be contiguous in space.
+    """
+    level: int
+    cell_size: np.ndarray  # (3,) array of floats
+    blocks: List[GridBlock] = field(default_factory=list)
+
+    @property
+    def num_blocks(self) -> int:
+        return len(self.blocks)
+
+
+@dataclass
+class FieldHierarchy:
+    """
+    A hierarchical structure for organizing AMR volume data by level and
+    block, with units.
+    """
+    unit: Dict[str, str]
+    field_units: Dict[str, object] = field(default_factory=dict)
+    levels: Dict[int, GridLevel] = field(default_factory=dict)
+
+    def add_block(self, level: int, block: GridBlock, cell_size):
+        if level not in self.levels:
+            self.levels[level] = GridLevel(level=level, cell_size=cell_size)
+        self.levels[level].blocks.append(block)
+
+    def get_info(self):
+        info = {}
+        for level, lvl_data in self.levels.items():
+            info[level] = {
+                "num_blocks": lvl_data.num_blocks,
+                "cell_size": lvl_data.cell_size,
+            }
+        return info
+
+
+@dataclass
+class GridStructureReport:
+    """
+    Result of analyze_grid_structure().
+    """
+    levels: List[int]
+    grids_per_level: Dict[int, int]
+    has_overlap: bool
+    overlapping_pairs: List[Tuple[int, int, int]]  # (level, grid_id_1, grid_id_2)
+    refine_by: int
+    suggested_block_per_axis: int
+    block_per_axis_source: str
+
+
+def analyze_grid_structure(ds) -> GridStructureReport:
+    """
+    Inspect a yt dataset's AMR grid hierarchy and check whether block are overlapping.
+    """
+    grids_by_level: Dict[int, List] = {}
+    for g in ds.index.grids:
+        grids_by_level.setdefault(int(g.Level), []).append(g)
+ 
+    overlapping_pairs: List[Tuple[int, int, int]] = []
+    for lvl, grids in grids_by_level.items():
+        if len(grids) <= 1:
+            continue
+        for i in range(len(grids)):
+            for j in range(i + 1, len(grids)):
+                g1_left, g1_right = grids[i].LeftEdge.v, grids[i].RightEdge.v
+                g2_left, g2_right = grids[j].LeftEdge.v, grids[j].RightEdge.v
+                if np.all(g1_left < g2_right) and np.all(g1_right > g2_left):
+                    overlapping_pairs.append((lvl, int(grids[i].id), int(grids[j].id)))
+ 
+    refine_by = int(np.atleast_1d(getattr(ds, "refine_by", 2))[0])
+    suggested_block_per_axis, block_per_axis_source = _infer_block_per_axis(grids_by_level)
+ 
+    return GridStructureReport(
+        levels=sorted(grids_by_level.keys()),
+        grids_per_level={lvl: len(g) for lvl, g in grids_by_level.items()},
+        has_overlap=len(overlapping_pairs) > 0,
+        overlapping_pairs=overlapping_pairs,
+        refine_by=refine_by,
+        suggested_block_per_axis=suggested_block_per_axis,
+        block_per_axis_source=block_per_axis_source,
+    )
+
+def load_volume(
+    ds,
+    vtype: str = "gas",
+    fields: Optional[List[str]] = None,
+    levels: Optional[List[int]] = None,
+    region=None,
+    block_per_axis: Optional[int] = None,
+    verbose: bool = None,
+    force_non_remap: bool = False
+) -> FieldHierarchy:
+    """
+    Load AMR volume data from a yt dataset, grouped by level.
+
+    Grid structure is inspected by analyze_grid_structure and load 
+    directly from ds.index.grids or remapping via covering_grid if overlapping or upon requested.
+
+    Parameters
+    ----------
+    ds : yt.Dataset
+        The yt dataset object.
+    vtype : str
+        yt field type (default: "gas")
+    fields : list of str or None
+        Field names, e.g. ["density", "temperature"]. Default: ["density"]
+    levels : list or None
+        AMR levels to include (native path only); None = all
+    region : yt data container or None
+        Optional region selector.
+    block_per_axis : int or None
+        Blocks-per-dimension to use if remapping is needed. If None
+        (default), this is auto-detected from `ds` via
+        `analyze_grid_structure`.
+
+    Returns
+    -------
+    FieldHierarchy
+        A structured hierarchy of grid blocks organized by AMR level,
+        containing field data and units.
+    """
+    fields = list(fields) if fields is not None else ["density"]
+ 
+    print(f"\n{'='*50}")
+    print(f"Loading volume data from dataset: {ds}. Inspecting grid structure...")
+    print(f"{'-'*50}")
+ 
+    report = analyze_grid_structure(ds)
+    print(f"  Levels found: {report.levels}")
+    print(f"  Grids per level: {report.grids_per_level}")
+    
+    if force_non_remap:
+        print("  force_non_remap=True: loading directly from ds.index.grids, ignoring overlaps.")
+        if verbose is None:
+            verbose = True
+        return _load_amr_volume(ds, vtype=vtype, fields=fields, levels=levels, region=region, verbose=verbose)
+    
+    if report.has_overlap or block_per_axis is not None:
+        chosen_bpa = block_per_axis if block_per_axis is not None else report.suggested_block_per_axis
+        if chosen_bpa < 4 or chosen_bpa % 4 != 0:
+            raise ValueError(
+                f"block_per_axis={chosen_bpa} is invalid: the center-skip remap logic "
+                "only produces gap-free coverage when block_per_axis is a multiple of 4 "
+            )
+        source = "user-specified, rebuilding at a different subdivision" if block_per_axis is not None else report.block_per_axis_source
+        print(f"  Overlapping grids detected ({len(report.overlapping_pairs)} pair(s)).")
+        print(f"  Block_per_axis={chosen_bpa} ({source}).")
+        if verbose is None:
+            verbose = True
+        return _load_remap_amr_volume(
+            ds, vtype=vtype, fields=fields, report=report,
+            block_per_axis=chosen_bpa, levels=levels, region=region, verbose=verbose
+        )
+
+    print("  No overlapping grids detected.")
+    if verbose is None:
+        verbose = False
+    return _load_amr_volume(ds, vtype=vtype, fields=fields, levels=levels, region=region, verbose = verbose)
+
+def _get_field_units(ds, vtype: str, fields: List[str]) -> Dict[str, str]:
+    """Shared helper: resolve field units once, used by both loading paths."""
+    return {f: str(ds.field_info[(vtype, f)].units) for f in fields}
+
+
+def _load_amr_volume(ds, vtype, fields, levels, region, verbose = False) -> FieldHierarchy:
+    """Load blocks directly from ds.index.grids. """
+    
+    hierarchy = FieldHierarchy(
+        unit={
+            "length": ds.length_unit,
+            "mass": ds.mass_unit,
+            "time": ds.time_unit,
+        },
+        field_units=_get_field_units(ds, vtype, fields),
+    )
+    
+    print(f"{'='*50}")
+    print(f"Loading volume data directly...")
+    print(f"  Unit: length={ds.length_unit}, mass={ds.mass_unit}, time={ds.time_unit}")
+    print(f"  Field units: {hierarchy.field_units}")
+
+    for grid in ds.index.grids:
+        level = int(grid.Level)
+        if levels is not None and level not in levels:
+            continue
+
+        if region is not None:
+            selector = region & grid
+            if selector is None:
+                continue
+            data_source = selector
+        else:
+            data_source = grid
+
+        dims = np.array([int(d) for d in data_source.ActiveDimensions])
+        left_edge = np.array([float(d) for d in data_source.LeftEdge.to_value()])
+        right_edge = np.array([float(d) for d in data_source.RightEdge.to_value()])
+        cell_size = np.array([float(d) for d in data_source.dds.to("code_length").value])
+
+        field_dict = {f: data_source[(vtype, f)].in_base("code").v for f in fields}
+
+        block = GridBlock(
+            block_id=grid.id,
+            left_edge=left_edge,
+            right_edge=right_edge,
+            dims=dims,
+            fields=field_dict,
+        )
+        hierarchy.add_block(level=level, block=block, cell_size=cell_size)
+        
+        if verbose:
+            print(f"  Added Block {grid.id} at Level {level}: Left Edge: {left_edge}, Right Edge: {right_edge}, Dims: {dims}")
+
+
+    print(f"{'='*50}")
+    return hierarchy
+
+def _center_core_range(block_per_axis: int) -> Tuple[int, int]:
+    """
+    Return the region that gets skipped at non-max levels
+    because the next-finer level's covering_grid will fully fills it.
+    """
+    
+    core = block_per_axis // 2
+    start = (block_per_axis - core) // 2
+    return start, start + core - 1
+ 
+ 
+def _infer_block_per_axis(grids_by_level: Dict[int, List]) -> Tuple[int, str]:
+    """
+    Recover `block_per_axis` from the dataset's own native grid layout,
+    assuming the max level's grids tile a cubic block_per_axis**3 arrangement, 
+    and non-max levels tile the same arrangement minus the centered core.
+    Rounded up to the nearest multiple of 4 if needed. 
+
+    Returns (block_per_axis, human-readable source description).
+    """
+    
+    if not grids_by_level:
+        return 4, "no grid info available, default using block_per_axis=4"
+ 
+    max_level = max(grids_by_level.keys())
+    n_max = len(grids_by_level[max_level])
+ 
+    raw_candidate = round(n_max ** (1 / 3))
+    candidate = max(4, int(np.ceil(raw_candidate / 4) * 4))
+ 
+    if candidate ** 3 == n_max:
+        source = f"inferred from level {max_level} having {n_max} = {candidate}^3 grids"
+    else:
+        source = (f"approximated from level {max_level} having {n_max} grids, "
+                   f"not a perfect cube -- rounded to block_per_axis={candidate})")
+ 
+    # Check against non-max levels
+    expected_non_max = candidate ** 3 - (candidate // 2) ** 3
+    for lvl, grids in grids_by_level.items():
+        if lvl == max_level:
+            continue
+        if len(grids) != expected_non_max:
+            source += (f"; note: level {lvl} has {len(grids)} grids, expected {expected_non_max} "
+                        f"for block_per_axis={candidate}.")
+            break
+ 
+    return candidate, source
+ 
+ 
+def _resolve_internal_block_edges(ds, block_id, current_level, max_level, block_per_axis, block_per_non_max_level, refine_by):
+    """
+    Map a linear block_id at `current_level` to physical (left_edge,
+    right_edge). Non-max levels skip the center core of the
+    block_per_axis**3 grid.
+    Assumes the nested refinement is centered on the dataset's
+    domain center.
+    """
+    
+    is_max_level = (current_level == max_level)
+    core_start, core_end = _center_core_range(block_per_axis)
+
+    if not is_max_level:
+        relative_id = block_id % block_per_non_max_level
+        actual_grid_id = 0
+        valid_count = 0
+        for i in range(block_per_axis ** 3):
+            ix = i % block_per_axis
+            iy = (i // block_per_axis) % block_per_axis
+            iz = (i // (block_per_axis ** 2)) % block_per_axis
+            is_center = all(core_start <= idx <= core_end for idx in (ix, iy, iz))
+            if not is_center:
+                if valid_count == relative_id:
+                    actual_grid_id = i
+                    break
+                valid_count += 1
+    else:
+        actual_grid_id = block_id % (block_per_axis ** 3)
+
+    ix = actual_grid_id % block_per_axis
+    iy = (actual_grid_id // block_per_axis) % block_per_axis
+    iz = (actual_grid_id // (block_per_axis ** 2)) % block_per_axis
+    idx3 = np.array([ix, iy, iz])
+
+    domain_center = np.array([float(ds.domain_center[k].in_units("code_length").v) for k in range(3)])
+    level_edge = np.array([
+        float(ds.domain_width[k].in_units("code_length").v) / 2 / (refine_by ** current_level)
+        for k in range(3)
+    ])
+    block_width = (2 * level_edge) / block_per_axis
+
+    left_edge = domain_center - level_edge + idx3 * block_width
+    return left_edge, left_edge + block_width
+ 
+ 
+def _region_bbox(region) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Extraction of a (left_edge, right_edge) bounding box from
+    a yt data container, for the remap path's block-level filtering.
+    Non-box like (spheres, disks, ...) are handled via get_bbox() if
+    available. If neither is available, include everything and warn.
+    """
+    
+    if region is None:
+        return None
+    if hasattr(region, "left_edge") and hasattr(region, "right_edge"):
+        left = np.array([float(x) for x in region.left_edge.to_value()])
+        right = np.array([float(x) for x in region.right_edge.to_value()])
+        return left, right
+    if hasattr(region, "get_bbox"):
+        left, right = region.get_bbox()
+        return np.array([float(x) for x in left]), np.array([float(x) for x in right])
+    return None
+ 
+ 
+def _load_remap_amr_volume(
+    ds, vtype, fields, report: GridStructureReport, block_per_axis: int,
+    levels: Optional[List[int]] = None, region=None, verbose: bool = True
+) -> FieldHierarchy:
+    """
+    Rebuild the volume onto a non-overlapping block layout via
+    `covering_grid`.
+    `levels` restricts which levels are rebuilt at all (max_level for the
+    "skip the center core" logic is still the dataset's true max_level) 
+    `region` is an approximation here. Remapped blocksare kept only if 
+    its bounding box overlaps the region's bounding box (via `_region_bbox`).
+    This may include blokcs that only partially overlap the region.
+    If `region` doesn't expose a usable bounding box, filtering is skipped (with a warning).
+    """
+    
+    print(f"{'='*50}")
+    print(f"Remapping dataset: {ds}")
+ 
+    min_level = min(report.levels)
+    max_level = max(report.levels)
+    print(f"  Refinement levels: {min_level} to {max_level}")
+ 
+    active_levels = [lvl for lvl in range(min_level, max_level + 1) if levels is None or lvl in levels]
+    if levels is not None:
+        print(f"  Restricting to requested levels: {active_levels}")
+ 
+    bbox = _region_bbox(region)
+    if region is not None and bbox is None:
+        print("  [WARNING] `region` has no left_edge/right_edge or get_bbox(); "
+              "ignoring region filter for remapping.")
+    region_left, region_right = bbox if bbox is not None else (None, None)
+ 
+    block_per_non_max_level = block_per_axis ** 3 - (block_per_axis // 2) ** 3
+    print(f"  Blocks per non-maximum level: {block_per_non_max_level}")
+    print(f"  Blocks per maximum level: {block_per_axis ** 3}")
+ 
+    fh = FieldHierarchy(
+        unit={
+            "length": ds.length_unit,
+            "mass": ds.mass_unit,
+            "time": ds.time_unit,
+        },
+        field_units=_get_field_units(ds, vtype, fields),
+    )
+    print(f"  Unit: length={ds.length_unit}, mass={ds.mass_unit}, time={ds.time_unit}")
+    print(f"  Field units: {fh.field_units}")
+    
+    for level_idx in active_levels:
+        num_blocks = (block_per_axis ** 3) if level_idx == max_level else block_per_non_max_level
+        print(f"{'-'*50}")
+        print(f"Processing Level {level_idx} with up to {num_blocks} blocks.")
+ 
+        # Native cell size at this level, derived from the domain grid
+        # itself rather than from a raw ds.index.grids read (those grids
+        # are the ones that overlap, so we can't trust their .dds here).
+        level_cell_size = np.array([
+            float(ds.domain_width[k].in_units("code_length").v)
+            / int(ds.domain_dimensions[k]) / (report.refine_by ** level_idx)
+            for k in range(3)
+        ])
+        print(f"  Level {level_idx} cell size: {level_cell_size}")
+        skipped = 0
+        for b_id in range(num_blocks):
+            left, right = _resolve_internal_block_edges(
+                ds, b_id, level_idx, max_level, block_per_axis, block_per_non_max_level, report.refine_by
+            )
+ 
+            if region_left is not None:
+                overlaps = np.all(left < region_right) and np.all(right > region_left)
+                if not overlaps:
+                    skipped += 1
+                    continue
+ 
+            dims = tuple(
+                int(round((right[k] - left[k]) / level_cell_size[k])) for k in range(3)
+            )
+ 
+            grid = ds.covering_grid(level=level_idx, left_edge=left, dims=dims)
+            data = {f: grid[(vtype, f)].in_base("code").v for f in fields}
+ 
+            block = GridBlock(
+                block_id=b_id,
+                left_edge=left,
+                right_edge=right,
+                dims=np.array(dims),
+                fields=data,
+            )
+            fh.add_block(level=level_idx, block=block, cell_size=level_cell_size)
+            if verbose:
+                print(f"  Added Block {b_id} at Level {level_idx}: "
+                  f"Left Edge: {left}, Right Edge: {right}, Dims: {dims}")
+ 
+        if region_left is not None and skipped:
+            print(f"  Skipped {skipped} block(s) at Level {level_idx} outside region bbox.")
+ 
+    print(f"{'='*50}")
+    print(f"Finished remapping volume dataset {ds}.")
+    return fh
+
+def preview_field_slice(
+    data: Union[GridBlock, FieldHierarchy],
+    fields: Union[str, List[str]] = None,
+    axis: int = 0,
+    percentile: float = 50.0,
+    slice_pos: float = None,
+    levels: List[int] = None,
+    output_path: str = "preview.png"
+):
+    """
+    Preview field slices from either a single GridBlock or a full AMR
+    FieldHierarchy. For a hierarchy, all blocks across levels that
+    intersect the slice plane are composited onto ONE set of axes per
+    field, positioned by their own left_edge/right_edge, with finer
+    levels drawn on top of coarser ones.
+
+    Parameters
+    ----------
+    data       : GridBlock or FieldHierarchy
+    fields     : str or list[str] or None
+        Field name(s) to preview. If None, previews every field found.
+    axis       : int   0='z', 1='y', 2='x' (matches load_volume convention)
+    percentile : float
+        Auto-detect the slice position as this percentile (0-100) of the
+        domain extent along `axis`. Default 50 = middle. Ignored if
+        `slice_pos` is given explicitly.
+    slice_pos  : float or None
+        Explicit physical coordinate along `axis` to slice at. Overrides
+        `percentile` when given.
+    levels     : list[int] or None
+        AMR levels to include (FieldHierarchy only); None = all levels.
+    """
+    if isinstance(data, GridBlock):
+        all_blocks = [(0, data)]
+        cell_size_map = {0: (data.right_edge - data.left_edge) / data.dims}
+    elif isinstance(data, FieldHierarchy):
+        level_ids = sorted(data.levels.keys()) if levels is None else sorted(levels)
+        all_blocks = [
+            (lvl, block)
+            for lvl in level_ids if lvl in data.levels
+            for block in data.levels[lvl].blocks
+        ]
+        cell_size_map = {lvl: data.levels[lvl].cell_size for lvl in level_ids if lvl in data.levels}
+    else:
+        raise TypeError(f"Expected GridBlock or FieldHierarchy, got {type(data).__name__}")
+
+    if not all_blocks:
+        print("  [WARNING] No blocks found for requested levels.")
+        return
+
+    if fields is None:
+        fields = sorted({f for _, b in all_blocks for f in b.fields})
+    elif isinstance(fields, str):
+        fields = [fields]
+
+    valid_fields = [f for f in fields if any(f in b.fields for _, b in all_blocks)]
+    for f in fields:
+        if f not in valid_fields:
+            print(f"  [WARNING] Field '{f}' not found in any block; skipping.")
+    if not valid_fields:
+        print("  [WARNING] No valid fields to preview.")
+        return
+
+    all_left = np.min([b.left_edge for _, b in all_blocks], axis=0)
+    all_right = np.max([b.right_edge for _, b in all_blocks], axis=0)
+    if slice_pos is None:
+        pct = min(max(percentile, 0.0), 100.0)
+        slice_pos = all_left[axis] + (pct / 100.0) * (all_right[axis] - all_left[axis])
+
+    remaining_axes = [a for a in (0, 1, 2) if a != axis]
+    row_axis, col_axis = remaining_axes
+
+    n = len(valid_fields)
+    fig, axes_grid = plt.subplots(n, 2, figsize=(12, 5 * n), squeeze=False)
+    fig.suptitle(f"Field Preview  |  axis={axis}  |  slice_pos={slice_pos:.4g}")
+
+    for row, fname in enumerate(valid_fields):
+        ax_img, ax_hist = axes_grid[row, 0], axes_grid[row, 1]
+
+        hits = []
+        for lvl, block in all_blocks:
+            if fname not in block.fields:
+                continue
+            if not (block.left_edge[axis] <= slice_pos < block.right_edge[axis]):
+                continue
+            cell = cell_size_map[lvl]
+            idx = int((slice_pos - block.left_edge[axis]) / cell[axis])
+            idx = min(max(idx, 0), block.dims[axis] - 1)
+            slice_2d = np.take(block.fields[fname], idx, axis=axis)
+            hits.append((lvl, block, slice_2d))
+
+        if not hits:
+            ax_img.set_title(f"'{fname}'  |  no blocks intersect slice")
+        else:
+            vmin = min(s.min() for _, _, s in hits)
+            vmax = max(s.max() for _, _, s in hits)
+            im = None
+            for lvl, block, slice_2d in hits:
+                extent = [
+                    block.left_edge[col_axis], block.right_edge[col_axis],
+                    block.left_edge[row_axis], block.right_edge[row_axis],
+                ]
+                im = ax_img.imshow(
+                    slice_2d, cmap='viridis', origin='lower',
+                    extent=extent, vmin=vmin, vmax=vmax,
+                    zorder=lvl,
+                )
+            ax_img.set_xlim(all_left[col_axis], all_right[col_axis])
+            ax_img.set_ylim(all_left[row_axis], all_right[row_axis])
+            ax_img.set_title(f"'{fname}'  |  {len(hits)} blocks, levels {sorted({l for l, _, _ in hits})}")
+            plt.colorbar(im, ax=ax_img)
+
+        vals = np.concatenate([
+            b.fields[fname].ravel() for _, b in all_blocks if fname in b.fields
+        ])
+        ax_hist.hist(vals, bins=100, color='steelblue')
+        ax_hist.set_yscale('log')
+        ax_hist.set_title(f"'{fname}' value distribution")
+        ax_hist.set_xlabel(fname)
+        ax_hist.set_ylabel("Voxel count (log)")
+
+    plt.tight_layout()
+    plt.savefig(f"{output_path}", dpi=150)
+    plt.show()
+    print(f"Saved: {output_path}")
+
+===== FILE: Blender_Import/high_level_import.py =====
+import os
+import bpy
+from typing import List, Optional
+
+from .mesh_animation import setup_mesh_animation
+from .volume_animation import setup_volume_animation
+from ..Backend.save_load_hdf5 import load, get_summary
+
+
+def _find_hdf5_files(data_path: str) -> List[str]:
+    return sorted(
+        f for f in os.listdir(data_path)
+        if os.path.isfile(os.path.join(data_path, f)) and f.lower().endswith((".h5", ".hdf5"))
+    )
+
+
+def _has_vdb_sequence(data_path: str) -> bool:
+    """True if `data_path` contains a flat .vdb sequence or frame_* subfolders of .vdb files."""
+    if any(f.endswith(".vdb") for f in os.listdir(data_path)):
+        return True
+
+    for d in os.listdir(data_path):
+        sub = os.path.join(data_path, d)
+        if os.path.isdir(sub) and d.startswith("frame_"):
+            if any(f.endswith(".vdb") for f in os.listdir(sub)):
+                return True
+
+    return False
+
+
+def setup_animation(
+    data_path: str,
+    object: Optional[List[str]] = None,
+    material: Optional[bpy.types.Material] = None,
+    scale=None,
+    target_size= 200,
+    center=False,
+):
+    """
+    Scan `data_path` for animation data and set it up in Blender.
+
+    `data_path` is a folder that may contain any combination of:
+      - one or more .h5/.hdf5 files (mesh/particle/surface animation), each of
+        which may itself contain multiple objects
+      - a VDB sequence: either .vdb files directly in the folder, or frame_*
+        subfolders each containing one or more .vdb partitions per frame
+        (volume animation) -- layout is auto-detected, no flag needed
+
+    Everything found is set up; HDF5 objects and the VDB sequence (if present)
+    are independent and both get processed in the same call.
+
+    Parameters
+    ----------
+    data_path : str
+        Folder containing the animation data described above.
+    object : list of str, optional
+        [HDF5] Restrict loading to these object names, applied across
+        every HDF5 file found. Default: load every object in every file.
+        [VDB] Used as a prefix for every created volume object.
+    material : bpy.types.Material, optional
+        Applied to every created object. Compulsory for VDB sequence, optional for HDF5.
+    scale, target_size, center :
+        [HDF5 only] Forwarded to `setup_mesh_animation` for every object.
+
+    Returns
+    -------
+    dict
+        {
+            "mesh": {object_name: bpy.types.Object, ...},
+            "volume": bool,   # True if a VDB sequence was found and set up
+        }
+    """
+    if not os.path.isdir(data_path):
+        raise FileNotFoundError(f"Path does not exist or is not a folder: {data_path}")
+
+    hdf5_files = _find_hdf5_files(data_path)
+    has_vdb = _has_vdb_sequence(data_path)
+
+    if not hdf5_files and not has_vdb:
+        raise ValueError(f"No .h5/.hdf5 files or .vdb sequence found under: {data_path}")
+
+    print(f"\n{'='*50}")
+    print(f"Scanning animation data: {data_path}")
+    if hdf5_files:
+        print(f"  HDF5 files found: {hdf5_files}")
+        print(f"  HDF5 summary:")
+        for hdf5_file in hdf5_files:
+            file_path = os.path.join(data_path, hdf5_file)
+            summary = get_summary(file_path)
+            print(f"    {hdf5_file}:")
+            for object_name, object_summary in summary.items():
+                print(f"      {object_name}: {object_summary}")
+    if has_vdb:
+        print(f"  VDB sequence found: {has_vdb}")
+    print(f"{'='*50}")
+
+    results = {"mesh": {}, "volume": False}
+
+    # --- HDF5 -> mesh/particle/surface animation ---
+    for hdf5_file in hdf5_files:
+        file_path = os.path.join(data_path, hdf5_file)
+        data = load(file_path, object_names=object)
+
+        if scale is None and target_size is not None:
+            max_size = max(
+                max(frame.vertices.max(axis=0) - frame.vertices.min(axis=0))
+                for frames in data.values()
+                for frame in frames
+            )
+            scale = target_size / max_size if max_size > 0 else 1.0
+            print(f"Auto-calculated scale factor: {scale} (target size: {target_size}, max object size after scale: {max_size*scale})")
+        
+        elif scale is not None:
+            print(f"Using provided scale factor: {scale}")  ## Ignore target_size if scale is provided to ensure same scale for different object
+        
+        
+        for object_name, frames_data in data.items():
+            if object_name in results["mesh"]:
+                print(f"  Warning: object '{object_name}' already set up from another HDF5 file; overwriting.")
+
+            obj = setup_mesh_animation(
+                frames_data,
+                object=object_name,
+                scale=scale,
+                target_size=None,  # Already applied to scale above
+                center=center,
+                material=material,
+            )
+            results["mesh"][object_name] = obj
+
+    # --- VDB -> volume animation ---
+    if has_vdb:
+        setup_volume_animation(
+            data_path,
+            object = object_name[0] if object_name else "Volume",
+            material=material,
+        )
+        results["volume"] = True
+
+    return results
+
+===== FILE: Blender_Import/__init__.py =====
+
+
+===== FILE: Blender_Import/mesh_animation.py =====
+from ..Blender_Effect.object import create_object, set_object_shader
+from ..Backend.particle_data import SPHParticleData
+from ..Backend.surface_data import SurfaceData
+
+from typing import Union, List, Optional
+import numpy as np
+import bpy
+
+
+## Helper functions for mesh animation
+    
+_registered_handlers = {}
+
+def remove_existing_handler(obj_name):
+    old = _registered_handlers.pop(obj_name, None)
+    if old is not None and old in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.remove(old)
+
+def particle_frame_update(frame, mesh, position_scale=1.0, center=True):
+    """
+    Update particle mesh per frame.
+    frame : SPHParticleData
+    """
+    num_particles = frame.coordinates.shape[0]
+
+    # Ensure vertices exist
+    if len(mesh.vertices) != num_particles:
+        mesh.clear_geometry()
+        mesh.from_pydata([(0.0, 0.0, 0.0)] * num_particles, [], [])
+        mesh.update()
+
+    # Create attributes if missing
+    for name in frame.fields.keys():
+        if name not in mesh.attributes:
+            mesh.attributes.new(name=name, type='FLOAT', domain='POINT')
+
+    # Update vertex positions
+    pos = frame.coordinates.astype(np.float32) * position_scale
+    if center:
+        pos -= pos.mean(axis=0)
+    mesh.vertices.foreach_set("co", pos.ravel())
+
+    # Update attributes
+    for name, values in frame.fields.items():
+        mesh.attributes[name].data.foreach_set("value", np.ravel(values, order='C'))
+
+    mesh.update()
+    
+def surface_frame_update(frame, mesh, scale=1.0, center=True):
+    """
+    Update surface mesh per frame.
+    frame : dict with keys 'vertices' and 'faces'
+    """
+    verts = np.array(frame.vertices, dtype=np.float32) * scale
+    if center:
+        verts -= verts.mean(axis=0)
+
+    mesh.clear_geometry()
+    mesh.from_pydata(verts.tolist(), [], frame.faces.tolist())
+    mesh.update()
+
+## Main Function
+def setup_mesh_animation(
+    frames_data: Union[SPHParticleData, SurfaceData, List[Union[SPHParticleData, SurfaceData]]],
+    object: Union[str | bpy.types.Object] = None,
+    scale = None,
+    target_size = 200,
+    center=False,
+    material: Optional[bpy.types.Material] = None,
+):
+    """
+    Generic mesh animation setup for Blender.
+
+    Parameters
+    ----------
+    frames_data : list
+        List of SPHParticleData or SurfaceData per frame.
+    object_name : str
+        Name of the Blender object.
+    obj : bpy.types.Object or None
+        Existing object or None to create new.
+    scale : float
+        Scale factor for positions.
+    center : bool
+        Whether to center vertices/particles per frame.
+    material : bpy.types.Material, optional
+        Material to assign to the created/resolved object.
+    """
+    
+    print(f'\n{"="*50}')
+    if isinstance(object, bpy.types.Object):
+        obj = object
+        object = obj.name
+    print(f"Setting up mesh animation for object: {object}")
+    print(f"{'-'*50}")
+    
+    ## Resolve or create object
+    if isinstance(object, str):
+        if object in bpy.data.objects:
+            obj = bpy.data.objects[object]
+            print(f"  Apply animination on existing object: {object}")
+        else:
+            obj = create_object(object)
+            print(f"  Created new object: {object}")
+
+    mesh = obj.data
+    
+    if isinstance(frames_data, SPHParticleData) or isinstance(frames_data, SurfaceData):
+        frames_data = [frames_data]
+    elif isinstance(frames_data, list):
+        if not all(isinstance(f, (SPHParticleData, SurfaceData)) for f in frames_data):
+            raise TypeError("All elements in frames_data must be SPHParticleData or SurfaceData.")
+    else:
+        raise TypeError("frames_data must be (a list of) SPHParticleData or SurfaceData.")
+    
+    num_frames = len(frames_data)
+    print(f"  Number of frames: {num_frames}")
+
+    if material is not None:
+        set_object_shader(object, material)
+
+    if scale is None and target_size is not None:
+        if isinstance(frames_data[0], SPHParticleData):
+            scale = target_size / max(np.ptp(frames_data[0].coordinates, axis=0))
+            print(f"Auto-calculated scale factor: {scale} (target size: {target_size})")
+        elif isinstance(frames_data[0], SurfaceData):
+            scale = target_size / max(np.ptp(frames_data[0].vertices, axis=0))
+            print(f"Auto-calculated scale factor: {scale} (target size: {target_size})")
+        else:
+            raise TypeError("Unsupported frame data type for scaling.")
+    
+    elif scale is not None:
+        print(f"  Using provided scale factor: {scale}")
+        
+    else:
+        scale = 1.0
+        print(f"  Using default scale factor: {scale}")
+       
+    # Set scene frame range
+    scene = bpy.context.scene
+    scene.frame_start = 0
+    scene.frame_end = num_frames - 1
+
+    print(f"  Frame range: {scene.frame_start} to {scene.frame_end}")
+    print(f"  Material: {material.name if material else 'none'}")
+    print(f"{'-'*50}")
+        
+    # Inner handler function
+    def handler(scene):
+        f = scene.frame_current
+        if f < 0 or f >= num_frames:
+            return
+
+        frame = frames_data[f]
+
+        if isinstance(frame, SPHParticleData):
+            particle_frame_update(frame, mesh, scale, center)
+        elif isinstance(frame, SurfaceData):
+            surface_frame_update(frame, mesh, scale, center)
+
+    # Remove any old handler for this object, then register the new one
+    remove_existing_handler(obj.name)
+    bpy.app.handlers.frame_change_post.append(handler)
+    _registered_handlers[obj.name] = handler
+
+    # Link object to collection if not already
+    if bpy.context.collection not in obj.users_collection:
+        bpy.context.collection.objects.link(obj)
+
+    print(f"{object} animation registered ({num_frames} frames).")
+    print(f"{'='*50}")
+    return obj
+
+===== FILE: Blender_Import/volume_animation.py =====
+import os
+import bpy
+from ..Blender_Effect.object import set_object_shader
+
+
+def setup_volume_animation(
+    vdb_folder: str,
+    object: str = "Volume",
+    material: bpy.types.Material = None,
+    scale: float = None,
+    target_size: float = None,
+    ):
+    """
+    Sets up volume animation in Blender by importing VDB files per frame and
+    controlling their visibility.
+
+    Layout is auto-detected from `vdb_folder`:
+      - flat layout: one .vdb file directly in `vdb_folder` per frame
+      - partitioned layout: frame_* subfolders, each containing one or more
+        .vdb partitions for that frame
+    """
+
+    frame_to_filepaths = {}
+
+    ## Auto-detect layout: frame_* subfolders containing .vdb files means
+    ## each frame is split across multiple VDB partitions.
+    subfolders = sorted([
+        d for d in os.listdir(vdb_folder)
+        if os.path.isdir(os.path.join(vdb_folder, d)) and d.startswith("frame_")
+    ])
+    multi_vdb_per_frame = any(
+        any(f.endswith(".vdb") for f in os.listdir(os.path.join(vdb_folder, d)))
+        for d in subfolders
+    )
+
+    ## Construct frame to filepaths mapping
+    if multi_vdb_per_frame:
+        for frame_num, subfolder in enumerate(subfolders):
+            current_frame_folder = os.path.join(vdb_folder, subfolder)
+            vdb_files = sorted([f for f in os.listdir(current_frame_folder) if f.endswith(".vdb")])
+
+            if vdb_files:
+                frame_to_filepaths[frame_num] = [os.path.join(current_frame_folder, f) for f in vdb_files]
+    else:
+        vdb_files = sorted([f for f in os.listdir(vdb_folder) if f.endswith(".vdb")])
+        for frame_num, vdb_file in enumerate(vdb_files):
+            frame_to_filepaths[frame_num] = [os.path.join(vdb_folder, vdb_file)]
+
+    if not frame_to_filepaths:
+        print("Warning: No valid VDB sequence data detected. Exiting.")
+        return
+
+    print(f"\n{'='*50}")
+    print(f"Setting up volume animation from: {vdb_folder}")
+    print(f"{'-'*50}")
+    print(f"  Layout: {'partitioned (frame_*/*.vdb)' if multi_vdb_per_frame else 'flat (*.vdb)'}")
+    print(f"  Frames detected: {len(frame_to_filepaths)}")
+    print(f"  VDB files detected: {sum(len(files) for files in frame_to_filepaths.values())}")
+    print(f"  Material: {material.name if material else 'none'}")
+    print(f"{'-'*50}")
+
+    for frame_num, filepaths in sorted(frame_to_filepaths.items()):
+        print(f"Processing Frame {frame_num:03d}: Importing {len(filepaths)} VDB partitions...")
+        
+        ## Create collection for this frame
+        col = bpy.data.collections.new(f"frame_{frame_num:03d}")
+        bpy.context.scene.collection.children.link(col)
+        
+        ## Import VDB files for this frame
+        for filepath in filepaths:
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            name = f"{object}_{filename}" if object else filename
+            vol_data = bpy.data.volumes.new(name=name)
+            vol_data.filepath = filepath
+            obj = bpy.data.objects.new(name=name, data=vol_data)
+            set_object_shader(obj, material)
+            
+            if scale is not None:
+                obj.scale = (scale, scale, scale)
+                print(f"  Applied scale factor: {scale} to object: {obj.name}")
+            elif target_size is not None:
+                # Assuming the VDB volume has a bounding box, we can scale it to fit target_size
+                # This is a placeholder; actual bounding box calculation may be needed
+                bbox_size = max(vol_data.dimensions)
+                if bbox_size > 0:
+                    scale_factor = target_size / bbox_size
+                    obj.scale = (scale_factor, scale_factor, scale_factor)
+                    print(f"  Applied scale factor: {scale_factor} to object: {obj.name} for target size: {target_size}")
+            else:
+                obj.scale = (1.0, 1.0, 1.0)
+                     
+            if obj.name in bpy.context.scene.collection.objects:
+                bpy.context.scene.collection.objects.unlink(obj)
+            col.objects.link(obj)
+
+        ## Visibiltiy Control for the frame
+        for obj in col.objects:
+            obj.hide_viewport = True
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_viewport", frame=0)
+            obj.keyframe_insert(data_path="hide_render", frame=0)
+            
+            obj.hide_viewport = False
+            obj.hide_render = False
+            obj.keyframe_insert(data_path="hide_viewport", frame=frame_num)
+            obj.keyframe_insert(data_path="hide_render", frame=frame_num)
+            
+            obj.hide_viewport = True
+            obj.hide_render = True
+            obj.keyframe_insert(data_path="hide_viewport", frame=frame_num + 1)
+            obj.keyframe_insert(data_path="hide_render", frame=frame_num + 1)
+
+    print(f"Volume animation registered ({len(frame_to_filepaths)} frames).")
+    print(f"{'='*50}")
+
+===== FILE: Blender_Effect/__init__.py =====
+
+
+===== FILE: Blender_Effect/material.py =====
+## This module provides functions to create volume and mesh materials in Blender, including
+#  - create_volume_materials: Create individual volume materials for multiple species.
+#  - create_mesh_materials: Create individual Principled BSDF mesh materials for multiple species.
+#  - create_combined_grid_material: Create combined volume materials from multiple VDB grids via binary tree reduction.
+#  - create_field_volume_material: Create continuous field-driven volume materials using a matplotlib colormap.
+#  - create_transparent_mesh_materials: Create Principled BSDF mesh materials with Fresnel-driven transparency.
+
+
+import bpy
+import colorsys
+from typing import Union
+import numpy as np
+
+## Node creation helpers
+
+def _add_output_node(
+    nt: bpy.types.NodeTree,
+    location: tuple = (400, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeOutputMaterial")
+    node.location = location
+    return node
+
+
+def _add_volume_principled(
+    nt: bpy.types.NodeTree,
+    density: float = 0.0,
+    location: tuple = (100, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeVolumePrincipled")
+    node.location = location
+    node.inputs["Density"].default_value = density
+    return node
+
+
+def _add_attr_node(
+    nt: bpy.types.NodeTree,
+    attribute_name: str,
+    location: tuple = (-400, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeAttribute")
+    node.attribute_name = attribute_name
+    node.location = location
+    return node
+
+
+def _add_map_range(
+    nt: bpy.types.NodeTree,
+    from_min: float = 0.0,
+    from_max: float = 1.0,
+    to_min: float = 0.0,
+    to_max: float = 1.0,
+    clamp: bool = True,
+    location: tuple = (-550, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeMapRange")
+    node.location = location
+    node.clamp = clamp
+    node.inputs["From Min"].default_value = from_min
+    node.inputs["From Max"].default_value = from_max
+    node.inputs["To Min"].default_value = to_min
+    node.inputs["To Max"].default_value = to_max
+    return node
+
+
+def _add_color_ramp(
+    nt: bpy.types.NodeTree,
+    stops: list[tuple],
+    interpolation: str = "LINEAR",
+    location: tuple = (-200, 200),
+) -> bpy.types.Node:
+    """
+    Create a ColorRamp node from a list of stops.
+
+    Args:
+        stops: list of (position, R, G, B, A) tuples, at least 2 entries.
+               Use `sample_matplotlib_cmap` to build this.
+        interpolation: ColorRamp interpolation mode.
+
+    Returns:
+        The ColorRamp node.
+    """
+    node = nt.nodes.new("ShaderNodeValToRGB")
+    node.location = location
+    node.color_ramp.interpolation = interpolation
+
+    # Remove all but the first element (Blender always keeps at least one)
+    while len(node.color_ramp.elements) > 1:
+        node.color_ramp.elements.remove(node.color_ramp.elements[1])
+
+    # Set the first stop
+    node.color_ramp.elements[0].position = stops[0][0]
+    node.color_ramp.elements[0].color = stops[0][1:]
+
+    # Add remaining stops
+    for pos, r, g, b, a in stops[1:]:
+        el = node.color_ramp.elements.new(pos)
+        el.color = (r, g, b, a)
+
+    return node
+
+
+def _add_emission_math(
+    nt: bpy.types.NodeTree,
+    multiplier: float = 0.1,
+    location: tuple = (-200, -200),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeMath")
+    node.operation = "MULTIPLY"
+    node.inputs[1].default_value = multiplier
+    node.location = location
+    return node
+
+
+def _add_principled_bsdf(
+    nt: bpy.types.NodeTree,
+    base_color: tuple = (0.54, 0.20, 0.0, 1.0),
+    emission_color: tuple = (0.57, 0.15, 0.0, 1.0),
+    emission_strength: float = 0.15,
+    metallic: float = 0.0,
+    roughness: float = 1.0,
+    ior: float = 1.5,
+    alpha: float = 1.0,
+    location: tuple = (0, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    node.location = location
+    node.inputs["Base Color"].default_value = base_color
+    node.inputs["Metallic"].default_value = metallic
+    node.inputs["Roughness"].default_value = roughness
+    node.inputs["IOR"].default_value = ior
+    node.inputs["Alpha"].default_value = alpha
+    node.inputs["Emission Color"].default_value = emission_color
+    node.inputs["Emission Strength"].default_value = emission_strength
+    return node
+
+def _add_fresnel_node(
+    nt: bpy.types.NodeTree,
+    location: tuple = (0, 0),
+    ior: float = 1.1
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeFresnel")
+    node.location = location
+    node.inputs["IOR"].default_value = ior
+    return node
+
+def _add_add_shader(
+    nt: bpy.types.NodeTree,
+    location: tuple = (0, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeAddShader")
+    node.location = location
+    return node
+
+def _add_mix_shader(
+    nt: bpy.types.NodeTree,
+    location: tuple = (0, 0),
+) -> bpy.types.Node:
+    node = nt.nodes.new("ShaderNodeMixShader")
+    node.location = location
+    return node
+
+
+##  Utility helpers
+
+def _clear_node_tree(nt: bpy.types.NodeTree) -> None:
+    """Remove all nodes from a node tree."""
+    for node in nt.nodes:
+        nt.nodes.remove(node)
+
+
+def _get_or_create_material(mat_name: str) -> bpy.types.Material:
+    """Remove any existing material with this name, then create a fresh one."""
+    existing = bpy.data.materials.get(mat_name)
+    if existing is not None:
+        bpy.data.materials.remove(existing)
+    mat = bpy.data.materials.new(mat_name)
+    mat.use_nodes = True
+    return mat
+
+
+def _normalize_species_names(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]]
+) -> list[str]:
+    """
+    Normalize any accepted species/object input shape into a flat list of name strings.
+
+    Accepts: a single name string, a single bpy.types.Object, or a list mixing
+    either of those, in any combination.
+    """
+    if isinstance(species_names, str):
+        return [species_names]
+    elif isinstance(species_names, bpy.types.Object):
+        return [species_names.name]
+    elif isinstance(species_names, list):
+        return [obj.name if isinstance(obj, bpy.types.Object) else obj for obj in species_names]
+    else:
+        raise TypeError(
+            f"species_names must be a str, bpy.types.Object, or list of either; got {type(species_names)}"
+        )
+
+
+def _apply_material_to_object(name: str, mat: bpy.types.Material) -> bool:
+    """Apply `mat` to bpy.data.objects[name].data if the object exists. Returns success."""
+    obj = bpy.data.objects.get(name)
+    if obj is None:
+        print(f"  Warning: Object '{name}' not found in bpy.data.objects. Material '{mat.name}' not applied.")
+        return False
+    obj.data.materials.clear()
+    obj.data.materials.append(mat)
+    print(f"  Applied '{mat.name}' to object '{obj.name}'.")
+    return True
+
+
+## Colour helpers
+
+def sample_matplotlib_cmap(
+    cmap_name: str = "viridis",
+    n_stops: int = 8,
+) -> list[tuple]:
+    """
+    Sample a matplotlib colormap to produce ColorRamp stops.
+
+    Args:
+        cmap_name: matplotlib colormap name e.g. 'viridis', 'inferno', 'magma'
+        n_stops:   number of stops to sample
+
+    Returns:
+        List of (R, G, B, A) tuples with values in [0, 1].
+    """
+    import matplotlib.pyplot as plt
+    cmap = plt.get_cmap(cmap_name)
+    return [cmap(t) for t in np.linspace(0, 1, n_stops)]
+
+
+def autogenerate_colors(n: int, alpha: float = 1.0) -> list[tuple]:
+    """Generate N evenly-spaced HSV colors, returned as list of (R, G, B, A)."""
+    return [colorsys.hsv_to_rgb(i / n, 0.6, 1) + (alpha,) for i in range(n)]
+
+
+#  Public shader factories
+
+def create_volume_materials(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]],
+    field_attribute: str = "density",
+    species_colors_map: dict[str, tuple] = None,
+    emission_multiplier: float = 0.1,
+    apply: bool = True,
+) -> dict[str, tuple]:
+    """
+    Create volume materials for one or more species.
+    Existing materials with the same name will be overwritten.
+
+    Args:
+        species_names:       (list of) object/species name(s), or bpy.types.Object(s)
+        field_attribute:     attribute field to visualise for all species
+        species_colors_map:  optional dict mapping species_name to (R, G, B, A) color tuple
+        emission_multiplier: scaling for emission strength
+        apply:                if True, apply each material directly to the matching object
+
+    Returns:
+        dict: {species_name: (bpy_material, applied)}
+    """
+    species_names = _normalize_species_names(species_names)
+    N = len(species_names)
+
+    if species_colors_map is None:
+        colors = autogenerate_colors(N)
+        species_colors_map = {name: colors[i] for i, name in enumerate(species_names)}
+
+    print(f"\n{'='*50}")
+    print(f"Creating volume materials for species: {species_names}")
+    print("-" * 50)
+    print(f"  Field attribute: {field_attribute}")
+    print(f"  Colors: {species_colors_map}")
+    print(f"  Emission multiplier: {emission_multiplier}")
+    print("-" * 50)
+
+    stops = {
+        name: [(0.0, *species_colors_map[name]), (1.0, *species_colors_map[name])]
+        for name in species_names
+    }
+
+    materials = {}
+
+    for name in species_names:
+        mat = _get_or_create_material(f"{name}_volmat")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        output_node  = _add_output_node(nt, location=(400, 0))
+        volume_node  = _add_volume_principled(nt, location=(100, 0))
+        attr_node    = _add_attr_node(nt, field_attribute, location=(-400, 0))
+        ramp_node    = _add_color_ramp(nt, stops[name], location=(-200, 200))
+        math_node    = _add_emission_math(nt, emission_multiplier, location=(-200, -200))
+
+        # Links
+        nt.links.new(attr_node.outputs["Fac"],   math_node.inputs[0])
+        nt.links.new(attr_node.outputs["Fac"],   ramp_node.inputs["Fac"])
+        nt.links.new(math_node.outputs[0],       volume_node.inputs["Emission Strength"])
+        nt.links.new(ramp_node.outputs["Color"], volume_node.inputs["Emission Color"])
+        nt.links.new(volume_node.outputs["Volume"], output_node.inputs["Volume"])
+
+        print(f"Created volume material '{mat.name}' for species '{name}'.")
+        applied = _apply_material_to_object(name, mat) if apply else None
+        materials[name] = (mat, applied)
+
+    print("=" * 50)
+
+    return materials
+
+
+def create_mesh_materials(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]],
+    base_color: dict[str, tuple] = None,
+    emission_color: dict[str, tuple] = None,
+    emission_strength: float = 0.15,
+    apply: bool = True,
+) -> dict[str, tuple]:
+    """
+    Create Principled BSDF mesh materials for one or more species.
+
+    Args:
+        species_names:      (list of) object/species name(s), or bpy.types.Object(s)
+        base_color:         dict mapping species names to (R, G, B, A) base color tuples
+        emission_color:     dict mapping species names to (R, G, B, A) emission color tuples
+        emission_strength:  emission strength
+        apply:                if True, apply each material directly to the matching object
+
+    Returns:
+        dict: {species_name: (bpy_material, applied)}
+    """
+    species_names = _normalize_species_names(species_names)
+
+    if base_color is None:
+        base_color = {name: (0.54, 0.20, 0.0, 1.0) for name in species_names}
+
+    if emission_color is None:
+        emission_color = {name: (0.57, 0.15, 0.0, 1.0) for name in species_names}
+
+    print(f"\n{'='*50}")
+    print(f"Creating mesh materials for species: {species_names}")
+    print("-" * 50)
+    print(f"  Base colors: {base_color}")
+    print(f"  Emission colors: {emission_color}")
+    print(f"  Emission strength: {emission_strength}")
+    print("-" * 50)
+
+    materials = {}
+
+    for name in species_names:
+        mat = _get_or_create_material(f"{name}_meshmat")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        output_node = _add_output_node(nt, location=(400, 0))
+        bsdf_node   = _add_principled_bsdf(
+            nt,
+            base_color=base_color.get(name),
+            emission_color=emission_color.get(name),
+            emission_strength=emission_strength,
+            location=(0, 0),
+        )
+
+        # Links
+        nt.links.new(bsdf_node.outputs["BSDF"], output_node.inputs["Surface"])
+
+        print(f"Created mesh material '{mat.name}' for species '{name}'.")
+        applied = _apply_material_to_object(name, mat) if apply else None
+        materials[name] = (mat, applied)
+
+    print("=" * 50)
+
+    return materials
+
+
+def create_combined_grid_material(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]],
+    field_min: float = 0.0,
+    field_max: float = 1.0,
+    emission_multiplier: float = 0.1,
+    cmap_name: str = "viridis",
+    apply: bool = True,
+) -> dict[str, tuple]:
+    """
+    Create combined volume materials, each merging all grids from one VDB volume
+    using an AddShader binary tree reduction.
+
+    Args:
+        species_names:        (list of) volume object/species name(s) in bpy.data.volumes
+        field_min:            minimum field value for Map Range node
+        field_max:            maximum field value for Map Range node
+        emission_multiplier:  scaling for emission strength
+        cmap_name:            name of the matplotlib colormap
+        apply:                 if True, apply each material directly to the matching object
+
+    Returns:
+        dict: {species_name: (bpy_material, applied)}
+    """
+    species_names = _normalize_species_names(species_names)
+
+    print(f"\n{'='*50}")
+    print(f"Creating combined grid materials for species: {species_names}")
+    print("-" * 50)
+    print(f"  Field range: [{field_min}, {field_max}]")
+    print(f"  Emission multiplier: {emission_multiplier}")
+    print(f"  Colormap: {cmap_name}")
+    print("-" * 50)
+
+    bpy.context.scene.render.engine = "CYCLES"
+
+    colors = sample_matplotlib_cmap(cmap_name)
+    stops = [(i / 7, *color) for i, color in enumerate(colors)]  ## Default 8 stops in colour map
+
+    materials = {}
+
+    for species_name in species_names:
+        bpy.data.volumes[species_name].grids.load()
+        grid_list = list(bpy.data.volumes[species_name].grids.keys())
+        print(f"  '{species_name}': found {len(grid_list)} grids.")
+
+        mat = _get_or_create_material(f"{species_name}_volmat")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        output_node   = _add_output_node(nt, location=(1000, 0))
+        volume_outputs = []
+
+        for i, grid_name in enumerate(grid_list):
+            y = i * -300
+
+            attr_node    = _add_attr_node(nt, grid_name, location=(-800, y))
+            map_node     = _add_map_range(nt, field_min, field_max, location=(-550, y))
+            ramp_node    = _add_color_ramp(nt, stops, location=(-300, y))
+            math_node    = _add_emission_math(nt, emission_multiplier, location=(-300, y - 150))
+            volume_node  = _add_volume_principled(nt, location=(0, y))
+
+            nt.links.new(attr_node.outputs["Fac"],    map_node.inputs["Value"])
+            nt.links.new(map_node.outputs["Result"],  ramp_node.inputs["Fac"])
+            nt.links.new(map_node.outputs["Result"],  math_node.inputs[0])
+            nt.links.new(ramp_node.outputs["Color"],  volume_node.inputs["Emission Color"])
+            nt.links.new(math_node.outputs[0],        volume_node.inputs["Emission Strength"])
+
+            volume_outputs.append(volume_node.outputs["Volume"])
+
+        # Binary tree reduction using AddShader nodes
+        add_x = 350
+        level_counter = 0
+        nodes_in_current_level = len(volume_outputs)
+
+        while len(volume_outputs) > 1:
+            out1 = volume_outputs.pop(0)
+            out2 = volume_outputs.pop(0)
+
+            add_shader = _add_add_shader(nt, location=(add_x, -level_counter * 80))
+            level_counter += 1
+
+            nt.links.new(out1, add_shader.inputs[0])
+            nt.links.new(out2, add_shader.inputs[1])
+
+            volume_outputs.append(add_shader.outputs["Shader"])
+
+            nodes_in_current_level -= 2
+            if nodes_in_current_level <= 1:
+                add_x += 220
+                nodes_in_current_level = len(volume_outputs)
+
+        if volume_outputs:
+            nt.links.new(volume_outputs[0], output_node.inputs["Volume"])
+
+        print(f"Created combined grid material '{mat.name}' for species '{species_name}'.")
+        applied = _apply_material_to_object(species_name, mat) if apply else None
+        materials[species_name] = (mat, applied)
+
+    print("=" * 50)
+
+    return materials
+
+
+def create_field_volume_material(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]],
+    field: str = "density",
+    field_min: float = 0.0,
+    field_max: float = 1.0,
+    emission_multiplier: float = 0.1,
+    cmap_name: str = "viridis",
+    apply: bool = True,
+) -> dict[str, tuple]:
+    """
+    Create volume material(s) driven by a field value using a matplotlib colormap.
+
+    Args:
+        species_names:        (list of) species name(s), or bpy.types.Object(s)
+        field:                attribute field to visualise
+        field_min:            minimum field value for Map Range node
+        field_max:            maximum field value for Map Range node
+        emission_multiplier:  scaling for emission strength
+        cmap_name:            matplotlib colormap name e.g. 'viridis', 'inferno'
+        apply:                 if True, apply each material directly to the matching object
+
+    Returns:
+        dict: {species_name: (bpy_material, applied)}
+    """
+    species_names = _normalize_species_names(species_names)
+
+    print(f"\n{'='*50}")
+    print(f"Creating field volume materials for species: {species_names}")
+    print("-" * 50)
+    print(f"  Field: {field}")
+    print(f"  Field range: [{field_min}, {field_max}]")
+    print(f"  Emission multiplier: {emission_multiplier}")
+    print(f"  Colormap: {cmap_name}")
+    print("-" * 50)
+
+    colors = sample_matplotlib_cmap(cmap_name)
+    stops = [(i / 7, *color) for i, color in enumerate(colors)]  ## Default 8 stops in colour map
+
+    materials = {}
+
+    for species_name in species_names:
+        mat = _get_or_create_material(f"{species_name}_volmat")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        output_node    = _add_output_node(nt, location=(600, 0))
+        volume_node    = _add_volume_principled(nt, location=(300, 0))
+        attr_node      = _add_attr_node(nt, field, location=(-600, 0))
+        map_range_node = _add_map_range(nt, field_min, field_max, location=(-350, 0))
+        ramp_node      = _add_color_ramp(nt, stops, location=(-100, 200))
+        math_node      = _add_emission_math(nt, emission_multiplier, location=(-100, -200))
+
+        # Links
+        nt.links.new(attr_node.outputs["Fac"],    map_range_node.inputs["Value"])
+        nt.links.new(map_range_node.outputs["Result"], ramp_node.inputs["Fac"])
+        nt.links.new(map_range_node.outputs["Result"], math_node.inputs[0])
+        nt.links.new(math_node.outputs[0],        volume_node.inputs["Emission Strength"])
+        nt.links.new(ramp_node.outputs["Color"],  volume_node.inputs["Emission Color"])
+        nt.links.new(volume_node.outputs["Volume"], output_node.inputs["Volume"])
+
+        print(f"Created field volume material '{mat.name}' for species '{species_name}'.")
+        applied = _apply_material_to_object(species_name, mat) if apply else None
+        materials[species_name] = (mat, applied)
+
+    print("=" * 50)
+
+    return materials
+
+
+def create_transparent_mesh_materials(
+    species_names: Union[str, bpy.types.Object, list[str], list[bpy.types.Object]],
+    refractive_index: float = 1.1,
+    constrast_index: tuple = (0.0, 1.0),
+    base_color: dict[str, tuple] = None,
+    emission_color: dict[str, tuple] = None,
+    emission_strength: float = 5,
+    apply: bool = True,
+) -> dict[str, tuple]:
+    """
+    Create Principled BSDF mesh materials for one or more species using a Fresnel node.
+
+    Args:
+        species_names:      (list of) object/species name(s), or bpy.types.Object(s)
+        base_color:         dict mapping species names to (R, G, B, A) base color tuples
+        emission_color:     dict mapping species names to (R, G, B, A) emission color tuples
+        emission_strength:  emission strength
+        apply:                if True, apply each material directly to the matching object
+
+    Returns:
+        dict: {species_name: (bpy_material, applied)}
+    """
+    species_names = _normalize_species_names(species_names)
+    N = len(species_names)
+
+    if base_color is None:
+        base_color = {name: c for name, c in zip(species_names, autogenerate_colors(N))}
+
+    if emission_color is None:
+        emission_color = base_color
+
+    print(f"\n{'='*50}")
+    print(f"Creating transparent mesh materials for species: {species_names}")
+    print("-" * 50)
+    print(f"  Base colors: {base_color}")
+    print(f"  Emission colors: {emission_color}")
+    print(f"  Emission strength: {emission_strength}")
+    print(f"  Refractive index: {refractive_index}")
+    print(f"  Contrast index: {constrast_index}")
+    print("-" * 50)
+
+    materials = {}
+
+    for name in species_names:
+        mat = _get_or_create_material(f"{name}_tranmeshmat")
+        nt = mat.node_tree
+        _clear_node_tree(nt)
+
+        # Nodes
+        bsdf_node_trans = _add_principled_bsdf(
+            nt,
+            base_color=base_color[name],
+            emission_color=emission_color[name],
+            emission_strength=0.0,
+            alpha=0.0,
+            location=(-300, -100),
+        )
+
+        bsdf_node_col = _add_principled_bsdf(
+            nt,
+            base_color=base_color[name],
+            emission_color=emission_color[name],
+            emission_strength=emission_strength,
+            location=(-300, -500),
+        )
+
+        fresnel_node = _add_fresnel_node(nt, location=(-400, 200), ior=refractive_index)
+        color_ramp_node = _add_color_ramp(
+            nt,
+            [(constrast_index[0], 0.0, 0.0, 0.0, 1.0), (constrast_index[1], 1.0, 1.0, 1.0, 1.0)],
+            location=(-200, 200),
+        )
+        mix_shader_node = _add_mix_shader(nt, location=(200, 0))
+        output_node = _add_output_node(nt, location=(400, 0))
+
+        # Links
+        nt.links.new(bsdf_node_trans.outputs["BSDF"], mix_shader_node.inputs[1])
+        nt.links.new(bsdf_node_col.outputs["BSDF"], mix_shader_node.inputs[2])
+        nt.links.new(fresnel_node.outputs["Fac"], color_ramp_node.inputs[0])
+        nt.links.new(color_ramp_node.outputs["Color"], mix_shader_node.inputs[0])
+        nt.links.new(mix_shader_node.outputs["Shader"], output_node.inputs["Surface"])
+
+        print(f"Created transparent mesh material '{mat.name}' for species '{name}'.")
+        applied = _apply_material_to_object(name, mat) if apply else None
+        materials[name] = (mat, applied)
+
+    print("=" * 50)
+
+    return materials
+
+===== FILE: Blender_Effect/node.py =====
+import bpy
+import typing
+
+from .object import (
+    resolve_object,
+    duplicate_object,
+    add_gn_modifer
+)
+
+def sph_point_to_volume(obj: typing.Union[str, bpy.types.Object],
+                        attribute_name: str | None = None,
+                        material_name: str | None = None,
+                        voxel_size: float = 0.02,
+                        density: float = 0.2,
+                        math_multiplier: float = 0.03):
+
+    obj = resolve_object(obj)
+    species_name = obj.name
+    group_name = species_name + "_volnode"
+      
+    if material_name is None:   
+        material_name = species_name + "_volshader"  
+        
+    gn_mod, sph_group = add_gn_modifer(obj, group_name) 
+
+    # Interface
+    geometry_socket = sph_group.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    geometry_socket.attribute_domain = 'POINT'
+
+    geometry_socket_1 = sph_group.interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    geometry_socket_1.attribute_domain = 'POINT'
+
+    # Nodes
+    group_input = sph_group.nodes.new("NodeGroupInput")
+    group_input.name = "Group Input"
+
+    group_output = sph_group.nodes.new("NodeGroupOutput")
+    group_output.name = "Group Output"
+    group_output.is_active_output = True
+
+    points_to_volume = sph_group.nodes.new("GeometryNodePointsToVolume")
+    points_to_volume.resolution_mode = 'VOXEL_SIZE'
+    points_to_volume.inputs[1].default_value = density  # Density
+    points_to_volume.inputs[2].default_value = voxel_size  # Voxel Size
+
+    set_material = sph_group.nodes.new("GeometryNodeSetMaterial")
+    set_material.name = "Set Material"
+    set_material.inputs[1].default_value = True  # Selection
+    
+    if material_name in bpy.data.materials:
+        set_material.inputs[2].default_value = bpy.data.materials[material_name]
+    else:
+        raise ValueError(f"Material '{material_name}' not found in bpy.data.materials.")
+
+
+    # Set locations
+    sph_group.nodes["Group Input"].location = (-350.0, 50.0)
+    sph_group.nodes["Group Output"].location = (450.0, 100.0)
+    sph_group.nodes["Points to Volume"].location = (-100.0, 100.0)
+    sph_group.nodes["Set Material"].location = (200.0, 100.0)
+
+    # Links
+    sph_group.links.new(sph_group.nodes["Group Input"].outputs[0], sph_group.nodes["Points to Volume"].inputs[0])
+    sph_group.links.new(sph_group.nodes["Set Material"].outputs[0], sph_group.nodes["Group Output"].inputs[0])
+    sph_group.links.new(sph_group.nodes["Points to Volume"].outputs[0], sph_group.nodes["Set Material"].inputs[0])
+
+    if attribute_name is not None:
+        named_attr_radius = sph_group.nodes.new("GeometryNodeInputNamedAttribute")
+        named_attr_radius.name = "Radius Attribute"
+        named_attr_radius.data_type = 'FLOAT'
+        named_attr_radius.inputs[0].default_value = attribute_name  # Name
+
+        math_radius = sph_group.nodes.new("ShaderNodeMath")
+        math_radius.name = "Math Radius"
+        math_radius.operation = 'MULTIPLY'
+        math_radius.use_clamp = False
+        math_radius.inputs[1].default_value = math_multiplier
+
+        sph_group.links.new(named_attr_radius.outputs[0], math_radius.inputs[0])
+        sph_group.links.new(math_radius.outputs[0], points_to_volume.inputs[4])
+
+        named_attr_radius.location = (-500.0, -100.0)
+        math_radius.location = (-300.0, -50.0)
+    
+    
+    
+    return sph_group
+
+
+def sph_point_to_mesh(obj, 
+                      radius_attr: str = None, 
+                      material_name: str = None, 
+                      voxel_size: float = 0.3, 
+                      density: float = 1.0, 
+                      radius_multiplier: float = 1.1):
+    """ 
+    Create a modifer with GN node group that converts point to mesh with material. 
+
+    Args: 
+        group_name: Name of node group
+        radius_attr: Named attribute used for radius scaling
+        material_name: Name of material to assign
+        voxel_size: Voxel size for Points to Volume and Volume to Mesh
+        density: Density input for Points to Volume
+        radius_multiplier: Multiply radius by this factor
+
+    Returns: 
+        bpy.types.NodeTree: The created node group
+    """ 
+    obj = resolve_object(obj) 
+    species_name = obj.name 
+    group_name = species_name + '_meshnode' 
+
+
+    if material_name is None: 
+        material_name = species_name + '_meshshader' 
+
+    gn_mod, gn_group = add_gn_modifer(obj, group_name) 
+
+    # Interface 
+    geometry_socket = gn_group.interface.new_socket(name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry') 
+    geometry_socket.attribute_domain = 'POINT' 
+    geometry_socket_1 = gn_group.interface.new_socket(name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry') 
+    geometry_socket_1.attribute_domain = 'POINT' 
+
+    # Nodes 
+    group_input = gn_group.nodes.new("NodeGroupInput") 
+    group_input.name = "Group Input" 
+    group_output = gn_group.nodes.new("NodeGroupOutput") 
+    group_output.name = "Group Output" 
+    group_output.is_active_output = True 
+
+    points_to_volume = gn_group.nodes.new("GeometryNodePointsToVolume") 
+    points_to_volume.name = "Points to Volume" 
+    points_to_volume.resolution_mode = 'VOXEL_SIZE' 
+    points_to_volume.inputs[1].default_value = density 
+    points_to_volume.inputs[2].default_value = voxel_size 
+
+    volume_to_mesh = gn_group.nodes.new("GeometryNodeVolumeToMesh") 
+    volume_to_mesh.name = "Volume to Mesh" 
+    volume_to_mesh.resolution_mode = 'VOXEL_SIZE' 
+    volume_to_mesh.inputs[1].default_value = voxel_size 
+    volume_to_mesh.inputs[3].default_value = 0.01 
+    volume_to_mesh.inputs[4].default_value = 0.0267 
+
+    set_shade = gn_group.nodes.new("GeometryNodeSetShadeSmooth") 
+    set_shade.name = "Set Shade Smooth" 
+    set_shade.domain = 'FACE' 
+    set_shade.inputs[1].default_value = True 
+    set_shade.inputs[2].default_value = True 
+
+    set_material = gn_group.nodes.new("GeometryNodeSetMaterial") 
+    set_material.name = "Set Material" 
+    set_material.inputs[1].default_value = True 
+    if material_name and material_name in bpy.data.materials: 
+        set_material.inputs[2].default_value = bpy.data.materials[material_name] 
+
+    # Links 
+    gn_group.links.new(group_input.outputs[0], points_to_volume.inputs[0]) 
+    gn_group.links.new(points_to_volume.outputs[0], volume_to_mesh.inputs[0]) 
+    gn_group.links.new(volume_to_mesh.outputs[0], set_shade.inputs[0]) 
+    gn_group.links.new(set_shade.outputs[0], set_material.inputs[0]) 
+    gn_group.links.new(set_material.outputs[0], group_output.inputs[0]) 
+
+    # Locations 
+    group_input.location = (-600, 0) 
+    group_output.location = (600, 0) 
+    points_to_volume.location = (-300, 0) 
+    volume_to_mesh.location = (0, 0) 
+    set_shade.location = (300, 0) 
+    set_material.location = (450, 0) 
+
+    if radius_attr is not None: 
+        named_attr = gn_group.nodes.new("GeometryNodeInputNamedAttribute") 
+        named_attr.name = "Radius Attribute" 
+        named_attr.data_type = 'FLOAT' 
+        named_attr.inputs[0].default_value = radius_attr 
+
+        math_node = gn_group.nodes.new("ShaderNodeMath") 
+        math_node.name = "Math Multiply" 
+        math_node.operation = 'MULTIPLY' 
+        math_node.inputs[1].default_value = radius_multiplier 
+
+        gn_group.links.new(named_attr.outputs[0], math_node.inputs[0]) 
+        gn_group.links.new(math_node.outputs[0], points_to_volume.inputs[4]) 
+
+        named_attr.location = (-450, -100) 
+        math_node.location = (-150, -100)
+
+
+
+def select(
+    obj,
+    new_object_name: str,
+    mode: str = "attribute",  # "attribute" or "proximity"
+    attribute_name: str = None,
+    compare_value: float = None,
+    operation: str = "GREATER",  # GREATER, LESS, EQUAL, NOT_EQUAL
+    target_obj = None,
+    target_element: str = 'POINTS',  # 'POINTS', 'EDGES', 'FACES' for mesh
+    distance: float = 1.0,
+):
+    """ 
+    Add a Geometry Nodes modifier that selects points based on attribute or proximity. 
+    """
+    obj = resolve_object(obj)
+    new_obj = duplicate_object(obj, new_object_name)
+    mod_name = new_object_name
+
+    gn_mod, gn_group = add_gn_modifer(new_obj, mod_name)
+
+    # Group Input / Output
+    group_input = gn_group.nodes.new("NodeGroupInput")
+    group_input.name = "Group Input"
+    group_output = gn_group.nodes.new("NodeGroupOutput")
+    group_output.name = "Group Output"
+
+    # Add input/output sockets
+    geo_in = gn_group.interface.new_socket(
+        name="Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    geo_out = gn_group.interface.new_socket(
+        name="Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+
+    # Seperate Geometry node (selection gate)
+    separate_geo = gn_group.nodes.new("GeometryNodeSeparateGeometry")
+    separate_geo.domain = 'POINT'
+
+    # Link
+    gn_group.links.new(group_input.outputs[0], separate_geo.inputs[0])
+    gn_group.links.new(separate_geo.outputs[0], group_output.inputs[0])
+
+    # --- Simple attribute selection ---
+    if mode == "attribute":
+        if attribute_name is None or compare_value is None:
+            raise ValueError("attribute_name and compare_value required for 'attribute' mode")
+
+        attr_node = gn_group.nodes.new("GeometryNodeInputNamedAttribute")
+        attr_node.name = "Attribute Input"
+        attr_node.data_type = 'FLOAT'
+        attr_node.inputs[0].default_value = attribute_name
+
+        compare_node = gn_group.nodes.new("ShaderNodeMath")
+        compare_node.name = "Compare"
+        compare_node.inputs[1].default_value = compare_value
+        op_map = {
+            "GREATER": 'GREATER_THAN',
+            "LESS": 'LESS_THAN',
+            "EQUAL": 'EQUAL',
+            "NOT_EQUAL": 'NOT_EQUAL'
+        }
+        compare_node.operation = op_map.get(operation.upper(), 'GREATER_THAN')
+
+        # Link attribute → compare → selection
+        gn_group.links.new(attr_node.outputs[0], compare_node.inputs[0])
+        gn_group.links.new(compare_node.outputs[0], separate_geo.inputs[1])
+
+        # Layout
+        group_input.location = (-400, 0)
+        attr_node.location = (-200, 0)
+        compare_node.location = (0, 0)
+        separate_geo.location = (200, 0)
+        group_output.location = (400, 0)
+
+    # --- Advanced proximity selection ---
+    elif mode == "proximity":
+        if target_obj is None:
+            raise ValueError("target_obj required for 'proximity' mode")
+        target_obj = resolve_object(target_obj)
+
+        # Object info node
+        object_info_node = gn_group.nodes.new("GeometryNodeObjectInfo")
+        object_info_node.name = "Object Info"
+        object_info_node.transform_space = 'RELATIVE'
+        object_info_node.inputs[0].default_value = target_obj
+
+        # Proximity node
+        proximity_node = gn_group.nodes.new("GeometryNodeProximity")
+        proximity_node.name = "Proximity"
+
+        if target_element not in ('POINTS', 'EDGES', 'FACES'):
+            raise ValueError("target_element must be 'POINTS', 'EDGES', 'FACES'")
+
+        proximity_node.target_element = target_element
+
+        compare_node = gn_group.nodes.new("ShaderNodeMath")
+        compare_node.name = "Distance Compare"
+        compare_node.operation = 'LESS_THAN'
+        compare_node.inputs[1].default_value = distance
+
+        # Link proximity → compare → delete
+        gn_group.links.new(object_info_node.outputs[4], proximity_node.inputs[0])
+        gn_group.links.new(proximity_node.outputs[1], compare_node.inputs[0])
+        gn_group.links.new(compare_node.outputs[0], separate_geo.inputs[1])
+
+        # Layout
+        group_input.location = (-400, 0)
+        object_info_node.location = (-400, -200)
+        proximity_node.location = (-200, -100)
+        compare_node.location = (0, -100)
+        separate_geo.location = (200, 0)
+        group_output.location = (400, 0)
+
+    else:
+        raise ValueError("mode must be 'attribute' or 'proximity'")
+
+    return new_obj
+
+
+
+
+
+===== FILE: Blender_Effect/object.py =====
+import bpy
+'''
+Utilities for managing Blender objects, shading and modifiers.
+'''
+
+
+def duplicate_object(original_obj, new_name):
+    """
+    Duplicate object data. Remove existing object if name collide.
+    """
+    new_obj = bpy.data.objects.get(new_name)
+    if new_obj is not None:
+        bpy.data.objects.remove(new_obj)
+
+    new_obj = bpy.data.objects.new(new_name, original_obj.data)  
+    bpy.context.collection.objects.link(new_obj)             
+    return new_obj
+
+
+def resolve_object(obj):
+    if isinstance(obj, bpy.types.Object):
+        return obj
+    
+    elif isinstance(obj, str):
+        obj_ref = bpy.data.objects.get(obj)
+        
+        if not obj_ref:
+            raise ValueError(f"Object named '{obj}' not found in the scene.")
+            
+        return obj_ref
+    else:
+        raise TypeError("obj must be bpy.types.Object or a string")
+    
+def create_object(obj_name):
+    """Create or overwrite object and link to active collection."""
+    if obj_name in bpy.data.meshes:
+        bpy.data.meshes.remove(bpy.data.meshes[obj_name])
+    if obj_name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[obj_name])
+
+    mesh = bpy.data.meshes.new(obj_name)
+    obj = bpy.data.objects.new(obj_name, mesh)
+    
+    bpy.context.collection.objects.link(obj)
+    
+    return obj
+
+def set_object_shader(obj: bpy.types.Object | str, 
+                      shader_name = None):
+    """
+    Set the shader type of an object. If shader_name is None, try to find a material containing the object's name.
+    """
+    obj = resolve_object(obj)
+
+    if shader_name is not None:
+        if isinstance(shader_name, str):
+            mat = bpy.data.materials.get(shader_name)
+            
+                
+        elif isinstance(shader_name, bpy.types.Material):
+            mat = shader_name
+            
+        else:
+            raise TypeError("shader_name must be a string or bpy.types.Material")
+        
+        if mat is None:
+                print(f"Material '{shader_name}' not found.")
+        
+    else:
+        trial = [m for m in bpy.data.materials if obj.name in m.name]
+        print("All matching materials:", [m.name for m in trial], "for object:", obj.name, "Applied the first one.")
+        mat = trial[0]
+        
+        if mat is None:
+            print(f"No matching material found containing '{obj.name}'.")
+        
+    if mat is not None:
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+        print(f"Set shader '{mat.name}' for object '{obj.name}'.")
+        
+
+
+def list_modifiers(obj):
+    """
+    Print all modifiers on the given object with their index in the stack.
+    
+    Args:
+        obj: The Blender object or String
+    """
+    obj = resolve_object(obj)
+
+    print(f"Modifiers on object '{obj.name}':")
+    for idx, mod in enumerate(obj.modifiers):
+        print(f"  {idx}: {mod.name} ({mod.type})")
+
+
+def delete_modifier(obj, mod_name: str):
+    """
+    Delete a modifier from an object if it exists.
+    """
+    obj = resolve_object(obj)
+
+    mod = obj.modifiers.get(mod_name)
+    if mod:
+        obj.modifiers.remove(mod)
+        print(f"Deleted modifier '{mod_name}'")
+    else:
+        print(f"Modifier '{mod_name}' not found")
+
+
+def move_modifier(obj, mod_name: str, direction: str = 'up'):
+    """
+    Move a modifier up or down.
+    """
+    obj = resolve_object(obj)
+
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+
+    if direction == 'up':
+        bpy.ops.object.modifier_move_up(modifier=mod_name)
+        print(f"Moved modifier '{mod_name}' up")
+    elif direction == 'down':
+        bpy.ops.object.modifier_move_down(modifier=mod_name)
+        print(f"Moved modifier '{mod_name}' down")
+    else:
+        raise ValueError("Direction must be 'up' or 'down'")
+
+
+def add_gn_modifer(obj, mod_name: str):
+    """
+    Add a modifier WITH gn_node group. 
+    Delete existing modifier and gn_node group with the same name.
+    """
+    obj = resolve_object(obj)
+
+    if mod_name in bpy.data.node_groups: 
+        bpy.data.node_groups.remove(bpy.data.node_groups[mod_name]) 
+
+    gn_group = bpy.data.node_groups.new(type="GeometryNodeTree", name=mod_name)
+    gn_group.description = f"mod_name"
+    gn_group.is_modifier = True
+
+    if mod_name in bpy.data.objects[obj.name].modifiers:
+        bpy.data.objects[obj.name].modifiers.remove(bpy.data.objects[obj.name].modifiers[mod_name])
+    gn_mod = obj.modifiers.new(mod_name, 'NODES')
+    gn_mod.node_group = gn_group
+    
+    return gn_mod, gn_group
+
+
+===== FILE: Blender_Effect/scene.py =====
+import bpy
+import os
+
+class SceneManager:
+    def __init__(self, scene_name="AstroScene", export_dir="./output"):
+        self.scene_name = scene_name
+        self.export_dir = os.path.abspath(export_dir)
+        os.makedirs(self.export_dir, exist_ok=True)
+        
+        self.objects = {}  # track all objects
+        self.scene = bpy.context.scene
+        self.scene.name = scene_name
+    
+    def clear_scene(self):
+        bpy.ops.wm.read_homefile(use_empty=True)
+        self.objects = {}
+    
+    def add_object(self, obj_name, obj_data):
+
+        self.objects[obj_name] = obj_data
+        # actual Blender object creation happens here or in objects.py
+
+    def set_camera(self, location=(0,0,10), look_at=(0,0,0)):
+        cam = bpy.data.objects.get("Camera")
+        if not cam:
+            bpy.ops.object.camera_add(location=location)
+            cam = bpy.context.object
+        cam.location = location
+        cam.rotation_euler = (0,0,0)  # optionally compute proper rotation
+        self.scene.camera = cam
+
+    def set_light(self, location=(0,0,10)):
+        bpy.ops.object.light_add(type='SUN', location=location)
+
+    def get_export_path(self, filename="output.png"):
+        return os.path.join(self.export_dir, filename)
+
+

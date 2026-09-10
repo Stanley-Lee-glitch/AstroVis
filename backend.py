@@ -9,7 +9,15 @@ from .Backend.volume_data import (
     load_volume,
     GridBlock,
     GridLevel,
-    FieldHierarchy
+    FieldHierarchy,
+    export_volume_sequence,
+    get_field_value_ranges,
+)
+
+from .Backend.grid_to_vdb import (
+    grid_to_vdb,
+    hierarchy_to_vdb,
+    hierarchy_to_multiple_vdbs,
 )
 
 from .Backend.surface_data import SurfaceData
@@ -37,7 +45,3 @@ from .Backend.save_load_hdf5 import (
     validate
 )
 
-
-from .Backend.grid_remap import (
-    load_remap_amr_volume
-)
