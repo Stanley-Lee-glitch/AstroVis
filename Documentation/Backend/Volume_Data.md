@@ -185,7 +185,7 @@ Writes **one `.vdb` file per block** (`{prefix}_l{level}_b{block_id}.vdb`) inste
 |---|---|---|
 | Blender result | One volume object, nested internal grids | One object per block |
 | Per-block visibility/toggling | No | Yes |
-| Required for animation via [`volume_animation`](../blender_import/volume_animation.md) | No — that module expects the multi-file (or `frame_*`-partitioned) layout | **Yes** |
+| Required for animation via `volume_animation` | No — that module expects the multi-file (or `frame_*`-partitioned) layout | **Yes** |
 | Applying one shader uniformly | Simpler — one material assignment | Needs `create_combined_grid_material` to merge blocks in-shader, or a shared field range (`hierarchy_to_multiple_vdbs`'s printed global min/max is for exactly this) |
 
 Use `hierarchy_to_vdb` for a single static frame you want to treat as one cohesive object; use `hierarchy_to_multiple_vdbs` whenever you need per-block/per-level control, or whenever the output feeds into an animated sequence.
@@ -253,5 +253,5 @@ save("stromgren_sphere.hdf5", {
 })
 ```
 ## See also
-- [`Animation`](../Blender/Animation_setup.md.md) — importing a VDB sequence produced here as an animated Blender volume
-- [`Particle_Data`](Particle_data.md) — the SPH-native counterpart to this module
+- [`Animation`](../Blender/Animation_setup.md) — importing a VDB sequence produced here as an animated Blender volume
+- [`Particle_Data`](Particle_Data.md) — the SPH-native counterpart to this module

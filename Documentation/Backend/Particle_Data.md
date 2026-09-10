@@ -136,5 +136,5 @@ particles = load_particles(ds, ptype="gas", fields=fields)
 ```
 
 ## See also
-- [`Animation`](../Blender/Animation_setup.md.md) — `setup_animation`, the entry point for bringing an exported `.h5`/`.vdb` sequence into Blender
-- [`Volume_data`](Volume_data.md) — the AMR/grid-native counterpart to this module, for datasets that aren't SPH
+- [`Animation`](../Blender/Animation_setup.md) — `setup_animation`, the entry point for bringing an exported `.h5`/`.vdb` sequence into Blender
+- [`Volume_data`](Volume_Data.md) — the AMR/grid-native counterpart to this module, for datasets that aren't SPH
