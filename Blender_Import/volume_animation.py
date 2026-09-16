@@ -1,6 +1,103 @@
 import os
+import sys
+import tempfile
+
 import bpy
 from ..Blender_Effect.object import set_object_shader
+
+
+def _filter_suppressed_vdb_stderr(stderr_text: str) -> str:
+    visible_lines = []
+    for line in stderr_text.splitlines(True):
+        if "unsupported VDB file format" in line and "got version" in line:
+            continue
+        visible_lines.append(line)
+    return "".join(visible_lines)
+
+
+def _run_volume_import(filepath: str, suppress_vdb_warnings: bool):
+    if not suppress_vdb_warnings:
+        return bpy.ops.object.volume_import(
+            filepath=filepath,
+            use_sequence_detection=False,
+        ), ""
+
+    saved_stderr_fd = None
+    try:
+        stderr_fd = sys.stderr.fileno()
+        saved_stderr_fd = os.dup(stderr_fd)
+        captured_stderr_file = tempfile.TemporaryFile(mode="w+t")
+    except (AttributeError, OSError, ValueError):
+        if saved_stderr_fd is not None:
+            os.close(saved_stderr_fd)
+        return bpy.ops.object.volume_import(
+            filepath=filepath,
+            use_sequence_detection=False,
+        ), ""
+
+    with captured_stderr_file as captured_stderr:
+        sys.stderr.flush()
+        os.dup2(captured_stderr.fileno(), stderr_fd)
+        try:
+            result = bpy.ops.object.volume_import(
+                filepath=filepath,
+                use_sequence_detection=False,
+            )
+        finally:
+            sys.stderr.flush()
+            os.dup2(saved_stderr_fd, stderr_fd)
+            os.close(saved_stderr_fd)
+
+        captured_stderr.seek(0)
+        return result, captured_stderr.read()
+
+
+def _create_volume_object_from_filepath(filepath: str, name: str):
+    vol_data = bpy.data.volumes.new(name=name)
+    vol_data.filepath = filepath
+    return bpy.data.objects.new(name=name, object_data=vol_data)
+
+
+def _reset_imported_volume_transform(obj):
+    obj.location = (0.0, 0.0, 0.0)
+    obj.rotation_euler = (0.0, 0.0, 0.0)
+
+
+def _cleanup_imported_objects(imported_objects):
+    for imported_object in imported_objects:
+        volume_data = imported_object.data
+        bpy.data.objects.remove(imported_object, do_unlink=True)
+        if volume_data is not None and volume_data.users == 0:
+            bpy.data.volumes.remove(volume_data)
+
+
+def _import_volume_object(filepath: str, name: str, suppress_vdb_warnings: bool):
+    existing_object_ids = {existing.as_pointer() for existing in bpy.data.objects}
+    result, captured_stderr = _run_volume_import(filepath, suppress_vdb_warnings)
+
+    imported_objects = [
+        existing for existing in bpy.data.objects
+        if existing.as_pointer() not in existing_object_ids and existing.type == 'VOLUME'
+    ]
+
+    if 'FINISHED' in result and len(imported_objects) == 1:
+        obj = imported_objects[0]
+        obj.name = name
+        obj.data.name = name
+        _reset_imported_volume_transform(obj)
+        if captured_stderr:
+            visible_stderr = _filter_suppressed_vdb_stderr(captured_stderr)
+            if visible_stderr:
+                sys.stderr.write(visible_stderr)
+        return obj
+
+    if captured_stderr:
+        sys.stderr.write(captured_stderr)
+
+    if imported_objects:
+        _cleanup_imported_objects(imported_objects)
+
+    return _create_volume_object_from_filepath(filepath, name)
 
 
 def setup_volume_animation(
@@ -9,6 +106,7 @@ def setup_volume_animation(
     material: bpy.types.Material = None,
     scale: float = None,
     target_size: float = None,
+    suppress_vdb_warnings: bool = True,
     ):
     """
     Sets up volume animation in Blender by importing VDB files per frame and
@@ -21,7 +119,6 @@ def setup_volume_animation(
     """
 
     frame_to_filepaths = {}
-
     ## Auto-detect layout: frame_* subfolders containing .vdb files means
     ## each frame is split across multiple VDB partitions.
     subfolders = sorted([
@@ -70,27 +167,24 @@ def setup_volume_animation(
         for filepath in filepaths:
             filename = os.path.splitext(os.path.basename(filepath))[0]
             name = f"{object}_{filename}" if object else filename
-            vol_data = bpy.data.volumes.new(name=name)
-            vol_data.filepath = filepath
-            obj = bpy.data.objects.new(name=name, data=vol_data)
+
+            obj = _import_volume_object(filepath, name, suppress_vdb_warnings)
             set_object_shader(obj, material)
-            
+             
             if scale is not None:
                 obj.scale = (scale, scale, scale)
                 print(f"  Applied scale factor: {scale} to object: {obj.name}")
             elif target_size is not None:
-                # Assuming the VDB volume has a bounding box, we can scale it to fit target_size
-                # This is a placeholder; actual bounding box calculation may be needed
-                bbox_size = max(vol_data.dimensions)
+                bbox_size = max(obj.dimensions)
                 if bbox_size > 0:
                     scale_factor = target_size / bbox_size
                     obj.scale = (scale_factor, scale_factor, scale_factor)
                     print(f"  Applied scale factor: {scale_factor} to object: {obj.name} for target size: {target_size}")
             else:
                 obj.scale = (1.0, 1.0, 1.0)
-                     
-            if obj.name in bpy.context.scene.collection.objects:
-                bpy.context.scene.collection.objects.unlink(obj)
+                      
+            for existing_collection in list(obj.users_collection):
+                existing_collection.objects.unlink(obj)
             col.objects.link(obj)
 
         ## Visibiltiy Control for the frame

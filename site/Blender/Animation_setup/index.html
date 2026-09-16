@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Animation Setup - AstroVis</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Animation Setup";
+        var mkdocs_page_input_path = "Blender\\Animation_setup.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> AstroVis
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../Overview/">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Backend</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Particle_Data/">Particle Data</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Save_and_load/">Save and Load</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Volume_Data/">Volume Data</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Blender</span></p>
+              <ul class="current">
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Animation Setup</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#high-level-import">High-level import</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#setup_animationdata_path-objectnone-materialnone-scalenone-target_size200-centerfalse-suppress_vdb_warningstrue-dict">setup_animation(data_path, object=None, material=None, scale=None, target_size=200, center=False, suppress_vdb_warnings=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology">Methodology</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#mesh-animation">Mesh animation</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#setup_mesh_animationframes_data-objectnone-scalenone-target_size200-centerfalse-materialnone-bpytypesobject">setup_mesh_animation(frames_data, object=None, scale=None, target_size=200, center=False, material=None) -&gt; bpy.types.Object</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology_1">Methodology</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#known-limitations">Known limitations</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#volume-animation">Volume animation</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#setup_volume_animationvdb_folder-objectvolume-materialnone-scalenone-target_sizenone-suppress_vdb_warningstrue">setup_volume_animation(vdb_folder, object="Volume", material=None, scale=None, target_size=None, suppress_vdb_warnings=True)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#layouts">Layouts</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology_2">Methodology</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#known-limitations_1">Known limitations</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#see-also">See also</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../Node_and_shading/">Node and Shading</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../Object_and_scene/">Object and Scene</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">AstroVis</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Blender</li>
+      <li class="breadcrumb-item active">Animation Setup</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="setting-up-animation">Setting up Animation</h1>
+<p><em>Covers <code>Blender_Import/high_level_import.py</code>, <code>Blender_Import/mesh_animation.py</code>, and <code>Blender_Import/volume_animation.py</code>.</em></p>
+<p>Once backend data has been exported, the <code>Blender_Import</code> layer turns it into animated Blender objects.</p>
+<ul>
+<li><strong>HDF5</strong> (<code>.h5</code> / <code>.hdf5</code>) is used for particle and surface animations.</li>
+<li><strong>OpenVDB</strong> (<code>.vdb</code>) is used for volume animations.</li>
+<li><code>setup_animation</code> is the high-level entry point that can import both in one call.</li>
+</ul>
+<h2 id="high-level-import">High-level import</h2>
+<h3 id="setup_animationdata_path-objectnone-materialnone-scalenone-target_size200-centerfalse-suppress_vdb_warningstrue-dict"><code>setup_animation(data_path, object=None, material=None, scale=None, target_size=200, center=False, suppress_vdb_warnings=True) -&gt; dict</code></h3>
+<p>Scans a folder for any combination of HDF5 animation files and VDB volume sequences, then sets up everything it finds.</p>
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_path</code></td>
+<td>—</td>
+<td>Folder containing exported animation data.</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>None</code></td>
+<td>For HDF5, restricts loading to these object names. For VDB, a string is used directly as the created object-name prefix, and a list uses its first entry.</td>
+</tr>
+<tr>
+<td><code>material</code></td>
+<td><code>None</code></td>
+<td>Material applied to created objects. Required in practice for volume rendering; optional for mesh objects.</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>None</code></td>
+<td>Fixed scale forwarded to mesh animation.</td>
+</tr>
+<tr>
+<td><code>target_size</code></td>
+<td><code>200</code></td>
+<td>If <code>scale</code> is not given, mesh data is auto-scaled toward this size.</td>
+</tr>
+<tr>
+<td><code>center</code></td>
+<td><code>False</code></td>
+<td>Forwarded to mesh animation to optionally recenter mesh/particle positions per frame.</td>
+</tr>
+<tr>
+<td><code>suppress_vdb_warnings</code></td>
+<td><code>True</code></td>
+<td>Hides repeated OpenVDB version warnings from the terminal during scripted VDB import.</td>
+</tr>
+</tbody>
+</table>
+<p>Returns:</p>
+<pre><code class="language-python">{
+    &quot;mesh&quot;: {object_name: bpy.types.Object, ...},
+    &quot;volume&quot;: bool,
+}
+</code></pre>
+<pre><code class="language-python">from AstroVis.api import setup_animation
+
+setup_animation(&quot;path/to/exported_frames/&quot;, material=my_material)
+</code></pre>
+<h3 id="methodology">Methodology</h3>
+<p><code>setup_animation</code> performs two independent import passes:</p>
+<ol>
+<li><strong>HDF5 pass</strong> — every discovered file is read with <code>save_load_hdf5.load</code>, then every object inside it is registered through <code>setup_mesh_animation</code>.</li>
+<li><strong>VDB pass</strong> — if the folder also contains a valid VDB sequence, it is registered through <code>setup_volume_animation</code>.</li>
+</ol>
+<p>For the HDF5 path, <code>scale=None</code> with a non-<code>None</code> <code>target_size</code> triggers a single auto-computed scale factor based on the largest loaded object's extent, so all imported mesh objects from that call share one consistent size convention.</p>
+<h2 id="mesh-animation">Mesh animation</h2>
+<h3 id="setup_mesh_animationframes_data-objectnone-scalenone-target_size200-centerfalse-materialnone-bpytypesobject"><code>setup_mesh_animation(frames_data, object=None, scale=None, target_size=200, center=False, material=None) -&gt; bpy.types.Object</code></h3>
+<p>Registers a frame-change handler that rebuilds one Blender mesh object from a time series of particle or surface frames.</p>
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frames_data</code></td>
+<td>—</td>
+<td>One <code>SPHParticleData</code>, one <code>SurfaceData</code>, or a list of either type.</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>None</code></td>
+<td>Existing <code>bpy.types.Object</code> or object name string. If a name is given and no object exists yet, a new mesh object is created.</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>None</code></td>
+<td>Fixed coordinate scale applied on every frame.</td>
+</tr>
+<tr>
+<td><code>target_size</code></td>
+<td><code>200</code></td>
+<td>Used only when <code>scale</code> is <code>None</code>; auto-computes a scale from the first frame's extent.</td>
+</tr>
+<tr>
+<td><code>center</code></td>
+<td><code>False</code></td>
+<td>Recenter coordinates/vertices around their mean on each frame update.</td>
+</tr>
+<tr>
+<td><code>material</code></td>
+<td><code>None</code></td>
+<td>Optional material assigned to the object.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="methodology_1">Methodology</h3>
+<ul>
+<li>If <code>frames_data</code> contains <strong>particles</strong>, the mesh's vertex count is resized as needed, point positions are rewritten every frame, and every field in <code>frame.fields</code> is exposed as a Blender <code>FLOAT</code> / <code>POINT</code> attribute.</li>
+<li>If <code>frames_data</code> contains a <strong>surface</strong>, the mesh is fully rebuilt every frame from <code>vertices</code> and <code>faces</code>.</li>
+<li>Animation is driven by a <code>bpy.app.handlers.frame_change_post</code> callback rather than baked keyframes.</li>
+<li>Re-registering animation for the same object replaces the old handler via <code>remove_existing_handler</code>, so repeated calls do not stack duplicate callbacks.</li>
+</ul>
+<pre><code class="language-python">from AstroVis.api import setup_mesh_animation
+
+setup_mesh_animation(surface_frames, object=&quot;ShockSurface&quot;, target_size=150)
+</code></pre>
+<h3 id="known-limitations">Known limitations</h3>
+<ul>
+<li>Auto-scaling uses the <strong>first frame only</strong>. If the object's physical extent changes significantly later, the rendered size will drift relative to the original target.</li>
+<li><code>center=True</code> recenters each frame independently, which is useful for inspection but removes absolute motion through the scene.</li>
+</ul>
+<h2 id="volume-animation">Volume animation</h2>
+<h3 id="setup_volume_animationvdb_folder-objectvolume-materialnone-scalenone-target_sizenone-suppress_vdb_warningstrue"><code>setup_volume_animation(vdb_folder, object="Volume", material=None, scale=None, target_size=None, suppress_vdb_warnings=True)</code></h3>
+<p>Imports a VDB time series as one collection per frame, with per-frame visibility keyframes.</p>
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vdb_folder</code></td>
+<td>—</td>
+<td>Folder containing either a flat VDB sequence or <code>frame_*</code> subfolders.</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>"Volume"</code></td>
+<td>Prefix for each created Blender volume object name.</td>
+</tr>
+<tr>
+<td><code>material</code></td>
+<td><code>None</code></td>
+<td>Material assigned through <code>Blender_Effect.object.set_object_shader</code>.</td>
+</tr>
+<tr>
+<td><code>scale</code></td>
+<td><code>None</code></td>
+<td>Fixed object scale applied to every imported VDB object.</td>
+</tr>
+<tr>
+<td><code>target_size</code></td>
+<td><code>None</code></td>
+<td>If <code>scale</code> is omitted, approximate per-object scaling target based on the imported object bounds.</td>
+</tr>
+<tr>
+<td><code>suppress_vdb_warnings</code></td>
+<td><code>True</code></td>
+<td>Temporarily silences terminal warnings emitted by Blender/OpenVDB while each VDB file is imported.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="layouts">Layouts</h3>
+<p>Two folder layouts are supported:</p>
+<ol>
+<li><strong>Flat sequence</strong> — <code>.vdb</code> files directly under <code>vdb_folder</code>, one file per frame.</li>
+<li><strong>Partitioned sequence</strong> — <code>frame_*/</code> subfolders, each containing one or more <code>.vdb</code> files for that frame.</li>
+</ol>
+<p>The partitioned layout is the one produced by <code>grid_to_vdb.hierarchy_to_multiple_vdbs</code> when a volume frame has been split into many blocks.</p>
+<h3 id="methodology_2">Methodology</h3>
+<p>For each detected frame:</p>
+<ol>
+<li>A Blender collection named <code>frame_{NNN}</code> is created.</li>
+<li>Every <code>.vdb</code> file for that frame is imported through Blender's native <code>bpy.ops.object.volume_import</code> path, then moved into the frame collection.</li>
+<li>A material and scale are assigned.</li>
+<li>Visibility is keyframed so those objects are hidden before the frame, visible on their frame, then hidden again immediately after.</li>
+</ol>
+<p>This means the full sequence exists in the scene at once, with playback driven purely by hide/unhide keyframes.</p>
+<p>When <code>suppress_vdb_warnings=True</code>, AstroVis temporarily captures terminal stderr during the operator call, suppresses only the repeated warning <code>unsupported VDB file format ... got version 225</code>, and replays any other diagnostics. If stderr capture is unavailable in the current Blender environment, AstroVis falls back to the normal unsuppressed operator call.</p>
+<p>AstroVis also resets imported VDB objects back to zero location and zero rotation after the operator import so the result does not depend on the current 3D cursor or add-object orientation settings. If Blender's native operator does not return exactly one new volume object, AstroVis falls back to direct <code>bpy.data.volumes</code> creation for compatibility.</p>
+<pre><code class="language-python">from AstroVis.api import setup_volume_animation
+
+setup_volume_animation(&quot;path/to/vdb_frames/&quot;, object=&quot;Gas&quot;, material=gas_material)
+</code></pre>
+<h3 id="known-limitations_1">Known limitations</h3>
+<ul>
+<li>All frame objects remain loaded simultaneously, so memory usage scales with the total frame count and number of partitions.</li>
+<li><code>target_size</code> is computed per imported VDB object independently from the imported object bounds, so partitions or frames with different bounds do not automatically preserve a global relative size convention.</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../../Backend/Volume_Data/"><code>Volume_Data</code></a> — how grid data is loaded and exported to VDB</li>
+<li><a href="../Node_and_shading/"><code>Node_and_shading</code></a> — assigning materials and adding Geometry Nodes effects after import</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../../Backend/Volume_Data/" class="btn btn-neutral float-left" title="Volume Data"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../Node_and_shading/" class="btn btn-neutral float-right" title="Node and Shading">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../../Backend/Volume_Data/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../Node_and_shading/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

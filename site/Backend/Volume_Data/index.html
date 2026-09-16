@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Volume Data - AstroVis</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Volume Data";
+        var mkdocs_page_input_path = "Backend\\Volume_Data.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> AstroVis
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../Overview/">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Backend</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../Particle_Data/">Particle Data</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../Save_and_load/">Save and Load</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Volume Data</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#overview-of-volume-data-pipeline">Overview of Volume Data Pipeline</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#a-high-level-pipeline-export_volume_sequence">A high-level pipeline: export_volume_sequence(...)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#a-lower-level-example-load-inspect-export">A Lower-Level example: load + inspect + export</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#data-structures">Data Structures</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#gridblock">GridBlock</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#gridlevel">GridLevel</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#fieldhierarchy">FieldHierarchy</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#loading-the-data">Loading the Data</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#load_volumeds-vtypegas-fieldsnone-levelsnone-regionnone-block_per_axisnone-verbosenone-force_non_remapfalse-fieldhierarchy">load_volume(ds, vtype="gas", fields=None, levels=None, region=None, block_per_axis=None, verbose=None, force_non_remap=False) -&gt; FieldHierarchy</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology">Methodology</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#known-limitations-of-remapping">Known limitations of remapping</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#accessing-the-data">Accessing the Data</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#fieldhierarchyanalyze_field_datafieldsnone-logfalse-axis0-percentile500-slice_posnone-levelsnone-output_pathnone-value_rangesnone-dict">FieldHierarchy.analyze_field_data(fields=None, log=False, axis=0, percentile=50.0, slice_pos=None, levels=None, output_path=None, value_ranges=None) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#field-ranges-stored-on-the-hierarchy">Field ranges stored on the hierarchy</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#export_volume_sequenceinput_dir-output_dir-fielddensity-vtypegas-preview_every10-logtrue-multi_vdbtrue-dict">export_volume_sequence(input_dir, output_dir, field="density", vtype="gas", preview_every=10, log=True, multi_vdb=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#analyze_grid_structureds-gridstructurereport">analyze_grid_structure(ds) -&gt; GridStructureReport</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#exporting-to-vdb">Exporting to VDB</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#grid_to_vdbgrid_data-fielddensity-scale10-file_pathnone-logtrue">grid_to_vdb(grid_data, field="density", scale=1.0, file_path=None, log=True)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#exporting-a-full-fieldhierarchy">Exporting a full FieldHierarchy</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#hierarchy_to_vdbhierarchy-fielddensity-file_name_prefixvolume-scale10-logtrue">hierarchy_to_vdb(hierarchy, field="density", file_name_prefix="volume", scale=1.0, log=True)</a>
+    </li>
+    <li class="toctree-l4"><a class="reference internal" href="#hierarchy_to_multiple_vdbshierarchy-fielddensity-file_name_prefixvolume-scale10-logtrue">hierarchy_to_multiple_vdbs(hierarchy, field="density", file_name_prefix="volume", scale=1.0, log=True)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#single-file-vs-multiple-files">Single file vs. multiple files</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#extracting-surfaces-from-a-volume">Extracting Surfaces from a Volume</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#surfacedata">SurfaceData</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#1-isosurface-extraction">1. Isosurface extraction</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#grid_to_surfacegrid_data-threshold-fieldnone-build_objfalse-centertrue-scale10-plot_surfacetrue-axis0-slice_idxnone-surfacedata">grid_to_surface(grid_data, threshold, field=None, build_obj=False, center=True, scale=1.0, plot_surface=True, axis=0, slice_idx=None) -&gt; SurfaceData</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#grid_to_surfacesgrid_data-threshold-fieldsnone-kwargs-dictstr-surfacedata">grid_to_surfaces(grid_data, threshold, fields=None, **kwargs) -&gt; dict[str, SurfaceData]</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#2-ridge-surface-extraction-grid_to_ridge_surfacegrid_data-fieldnone-sigma12-lambda_pct10-min_cluster_size250-normal_k20-grid_sigma15-isovalue_pct50-plot_checktrue-print_componentstrue-axis0-slice_idxnone-centertrue-scale10-build_objfalse-surfacedata">2. Ridge surface extraction grid_to_ridge_surface(grid_data, field=None, sigma=1.2, lambda_pct=10, min_cluster_size=250, normal_k=20, grid_sigma=1.5, isovalue_pct=50, plot_check=True, print_components=True, axis=0, slice_idx=None, center=True, scale=1.0, build_obj=False) -&gt; SurfaceData</a>
+        <ul>
+    <li class="toctree-l4"><a class="reference internal" href="#methodology_1">Methodology</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#saving-the-surface">Saving the surface</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#savefile_path-data-modew-compressiongzip-compression_opts4">save(file_path, data, mode="w", compression="gzip", compression_opts=4)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#see-also">See also</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Blender</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Blender/Animation_setup/">Animation Setup</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Blender/Node_and_shading/">Node and Shading</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Blender/Object_and_scene/">Object and Scene</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">AstroVis</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Backend</li>
+      <li class="breadcrumb-item active">Volume Data</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="processing-volume-data">Processing Volume Data</h1>
+<p><em>Covers <code>Backend/volume_data.py</code>, <code>Backend/grid_to_surface.py</code>, and <code>Backend/grid_to_vdb.py</code>.</em></p>
+<p>Volume data refers to simulation snapshots produced by <strong>grid-based</strong> codes, often using an <strong>Adaptive Mesh Refinement (AMR)</strong> algorithm, which represent the fluid on a hierarchy of nested rectangular grid blocks — finer blocks are added on top of coarser ones wherever extra resolution is needed. <a href="https://www.athena-astro.app/">Athena++</a> is one example of a grid-based (Godunov) hydrodynamics code, and is used as the running example throughout this page.</p>
+<h2 id="overview-of-volume-data-pipeline">Overview of Volume Data Pipeline</h2>
+<p>The recommended reading order is: start with the one-shot export example, then drill down into the lower-level API if you need finer control. The high-level export path is the simplest way to go from a snapshot directory to Blender-friendly VDB files, while the lower-level routines are still kept available for custom inspection and manual pipeline building.</p>
+<h3 id="a-high-level-pipeline-export_volume_sequence">A high-level pipeline: <code>export_volume_sequence(...)</code></h3>
+<p>This is the integrated workflow for turning a snapshot directory into VDB files for Blender animation.</p>
+<pre><code class="language-python">from AstroVis import export_volume_sequence
+
+result = export_volume_sequence(
+    input_dir=&quot;snapshots&quot;,
+    output_dir=&quot;exports&quot;,
+    field=&quot;density&quot;,
+    vtype=&quot;gas&quot;,
+    preview_every=10,
+    log=True,
+    multi_vdb=True,
+)
+
+print(result[&quot;field_range&quot;])      # global (min, max) used for material scaling
+print(result[&quot;preview_paths&quot;])    # saved preview PNGs for sampled frames
+</code></pre>
+<p>Use this as the default entry point when you want the whole volume-export workflow; the lower-level tools below are there for custom inspection or specialized processing.</p>
+<p>What it does internally:</p>
+<ol>
+<li>loads each snapshot with <code>yt.load()</code></li>
+<li>calls <code>load_volume()</code> to build the AMR hierarchy</li>
+<li>computes the field range and preview slice via <code>analyze_field_data()</code></li>
+<li>calls <code>hierarchy_to_multiple_vdbs()</code> to export each frame to VDB files (<code>frame_0000/</code>, <code>frame_0001/</code>, ...)</li>
+<li>saves previews every <code>preview_every</code> frames using the final global range</li>
+<li>prints the final global min/max so the Blender material can reuse the same scale</li>
+</ol>
+<h3 id="a-lower-level-example-load-inspect-export">A Lower-Level example: load + inspect + export</h3>
+<pre><code class="language-python">import yt
+from AstroVis.Backend.volume_data import load_volume
+from AstroVis.Backend.grid_to_vdb import hierarchy_to_multiple_vdbs
+
+# 1) load a single snapshot
+snapshot = &quot;snapshot_000.hdf5&quot;
+ds = yt.load(snapshot)
+hierarchy = load_volume(ds, vtype=&quot;gas&quot;, fields=[&quot;density&quot;])
+
+# 2) inspect field statistics explicitly
+analysis = hierarchy.analyze_field_data(fields=&quot;density&quot;, log=True)
+print(analysis[&quot;ranges&quot;][&quot;density&quot;])
+
+# 3) optionally save a preview image with your chosen field range
+hierarchy.analyze_field_data(
+    fields=&quot;density&quot;,
+    output_path=&quot;density_preview.png&quot;,
+    log=True,
+    axis=0,
+    percentile=50,
+    value_ranges={&quot;density&quot;: analysis[&quot;ranges&quot;][&quot;density&quot;]},
+)
+
+# 4) export the frame to VDB files
+hierarchy_to_multiple_vdbs(
+    hierarchy,
+    field=&quot;density&quot;,
+    file_name_prefix=&quot;frame_0000/density&quot;,
+    log=True,
+)
+</code></pre>
+<h2 id="data-structures">Data Structures</h2>
+<h3 id="gridblock"><code>GridBlock</code></h3>
+<p>The basic unit of volume data — a single uniform rectangular grid.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>block_id</code></td>
+<td><code>int</code></td>
+<td>Identifier, unique within a level</td>
+</tr>
+<tr>
+<td><code>left_edge</code>, <code>right_edge</code></td>
+<td><code>(3,) ndarray</code></td>
+<td>Physical bounds of the block</td>
+</tr>
+<tr>
+<td><code>dims</code></td>
+<td><code>(3,) ndarray</code></td>
+<td>Voxel resolution along each axis</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td><code>dict[str, ndarray]</code></td>
+<td>Field name → 3D array</td>
+</tr>
+<tr>
+<td><code>field_ranges</code></td>
+<td><code>dict[str, tuple[float, float]]</code></td>
+<td>Cached min/max for each field in this block</td>
+</tr>
+</tbody>
+</table>
+<h3 id="gridlevel"><code>GridLevel</code></h3>
+<p>Groups all <code>GridBlock</code>s at one AMR refinement level (same <code>cell_size</code>, not necessarily spatially contiguous).</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>level</code></td>
+<td><code>int</code></td>
+<td>AMR refinement level</td>
+</tr>
+<tr>
+<td><code>cell_size</code></td>
+<td><code>(3,) ndarray</code></td>
+<td>Physical spacing at this level</td>
+</tr>
+<tr>
+<td><code>blocks</code></td>
+<td><code>list[GridBlock]</code></td>
+<td>Blocks that belong to the level</td>
+</tr>
+<tr>
+<td><code>field_ranges</code></td>
+<td><code>dict[str, tuple[float, float]]</code></td>
+<td>Cached aggregated min/max for the whole level</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fieldhierarchy"><code>FieldHierarchy</code></h3>
+<p>The full multi-level AMR volume.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>unit</code></td>
+<td><code>dict</code></td>
+<td>Length/mass/time units</td>
+</tr>
+<tr>
+<td><code>field_units</code></td>
+<td><code>dict</code></td>
+<td>Per-field units</td>
+</tr>
+<tr>
+<td><code>levels</code></td>
+<td><code>dict[int, GridLevel]</code></td>
+<td>All levels, keyed by level index</td>
+</tr>
+<tr>
+<td><code>field_ranges</code></td>
+<td><code>dict[str, tuple[float, float]]</code></td>
+<td>Cached global min/max across the hierarchy</td>
+</tr>
+</tbody>
+</table>
+<h2 id="loading-the-data">Loading the Data</h2>
+<h3 id="load_volumeds-vtypegas-fieldsnone-levelsnone-regionnone-block_per_axisnone-verbosenone-force_non_remapfalse-fieldhierarchy"><code>load_volume(ds, vtype="gas", fields=None, levels=None, region=None, block_per_axis=None, verbose=None, force_non_remap=False) -&gt; FieldHierarchy</code></h3>
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vtype</code></td>
+<td><code>"gas"</code></td>
+<td>yt field type. Available <code>(vtype, field)</code> combinations can be checked via <code>ds.derived_field_list</code> / <code>ds.field_list</code>.</td>
+</tr>
+<tr>
+<td><code>fields</code></td>
+<td><code>None</code> → <code>['density']</code></td>
+<td>Field name(s) to load.</td>
+</tr>
+<tr>
+<td><code>levels</code></td>
+<td><code>None</code></td>
+<td>Restrict to these AMR levels (direct path only). <code>None</code> = all. Valid range is <code>0</code> to <code>ds.max_level</code>.</td>
+</tr>
+<tr>
+<td><code>region</code></td>
+<td><code>None</code></td>
+<td>yt data container (sphere, box, ...) to restrict loading to, instead of the full domain.</td>
+</tr>
+<tr>
+<td><code>block_per_axis</code></td>
+<td><code>None</code> (auto)</td>
+<td>Forces the remap path at this subdivision; must be a multiple of 4.</td>
+</tr>
+<tr>
+<td><code>verbose</code></td>
+<td><code>None</code> (auto)</td>
+<td>Print per-block load lines; auto-enabled on the remap path.</td>
+</tr>
+<tr>
+<td><code>force_non_remap</code></td>
+<td><code>False</code></td>
+<td>Always use the direct path, ignoring detected overlaps.</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">ds = yt.load(&quot;dataset&quot;)
+hierarchy = load_volume(ds, vtype=&quot;gas&quot;, fields=[&quot;density&quot;, &quot;pressure&quot;])
+</code></pre>
+<p>With region constraint:</p>
+<pre><code class="language-python">box = ds.box([-0.5, -0.5, -0.5], [0.5, 0.5, 0.5])
+hierarchy = load_volume(ds, fields=[&quot;density&quot;], region=box)
+</code></pre>
+<h3 id="methodology">Methodology</h3>
+<p><code>load_volume</code> automatically decides between two loading strategies:</p>
+<ol>
+<li><strong>Direct</strong> — reads blocks straight from <code>ds.index.grids</code>. Used when the internal helper <code>analyze_grid_structure</code> finds no overlapping grids at any level, which is the common case.</li>
+<li><strong>Remap</strong> — used when grids overlap, or when <code>block_per_axis</code> is explicitly given to force it. Rebuilds the volume from scratch on a non-overlapping layout via <code>covering_grid</code>:</li>
+<li>At the finest level, the domain is tiled into <code>block_per_axis³</code> blocks.</li>
+<li>At every coarser level, the <strong>center core</strong> of that same <code>block_per_axis³</code> grid is skipped (since the next-finer level already covers it), and only the remaining shell blocks are built.</li>
+<li>This only produces gap-free coverage when <code>block_per_axis</code> is a multiple of 4, which <code>load_volume</code> enforces. When not provided, the internal helper <code>_infer_block_per_axis</code> guesses it from <code>(number of grids at the finest level)^(1/3)</code>, rounded up to the nearest multiple of 4.</li>
+<li>Region filtering on this path is a bounding-box approximation via the internal helper <code>_region_bbox</code> — blocks only <em>partially</em> overlapping <code>region</code> are still included in full. Non-box regions are supported if they provide <code>get_bbox()</code>.</li>
+<li>The center-skip scheme assumes refinement is centered on the domain center.</li>
+</ol>
+<p>Pass <code>force_non_remap=True</code> to always use the direct path regardless of detected overlaps (fast, but AMR blending artifacts may appear where blocks overlap).</p>
+<h3 id="known-limitations-of-remapping">Known limitations of remapping</h3>
+<ul>
+<li>Remap-path region filtering is a bounding-box approximation — blocks only <em>partially</em> overlapping the region are still included in full.</li>
+<li>The center-skip remap assumes refinement is centered on the domain center; off-center nested refinement is not handled.</li>
+</ul>
+<h2 id="accessing-the-data">Accessing the Data</h2>
+<p><code>GridBlock</code> fields are a plain dict and can be accessed by key.
+<code>FieldHierarchy</code> blocks are reached by indexing into <code>.levels</code>.</p>
+<p>Useful attributes and methods:</p>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GridBlock.keys()</code></td>
+<td>Shortcut for <code>.fields.keys()</code></td>
+</tr>
+<tr>
+<td><code>GridBlock.get_field_value_ranges(fields=None, log=False)</code></td>
+<td>Compute min/max for the block and cache them</td>
+</tr>
+<tr>
+<td><code>GridLevel.get_field_value_ranges(fields=None, log=False)</code></td>
+<td>Aggregate min/max across blocks on a level</td>
+</tr>
+<tr>
+<td><code>FieldHierarchy.get_field_value_ranges(fields=None, log=False)</code></td>
+<td>Aggregate min/max across the hierarchy</td>
+</tr>
+<tr>
+<td><code>FieldHierarchy.add_block(level, block, cell_size)</code></td>
+<td>Insert a <code>GridBlock</code></td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-python">density = block.fields[&quot;density&quot;]     # raw field array
+block.keys()                          # ['density', 'pressure']
+
+finest_level = max(hierarchy.levels)
+for block in hierarchy.levels[finest_level].blocks:
+    print(block.block_id, block.dims)
+
+print(hierarchy.get_field_value_ranges(fields=&quot;density&quot;, log=True)[&quot;density&quot;])
+</code></pre>
+<h3 id="fieldhierarchyanalyze_field_datafieldsnone-logfalse-axis0-percentile500-slice_posnone-levelsnone-output_pathnone-value_rangesnone-dict"><code>FieldHierarchy.analyze_field_data(fields=None, log=False, axis=0, percentile=50.0, slice_pos=None, levels=None, output_path=None, value_ranges=None) -&gt; dict</code></h3>
+<p>This is the central inspection method on the loaded hierarchy. It can:</p>
+<ul>
+<li>compute the global field range for one or more fields</li>
+<li>optionally build a slice preview image with <code>output_path</code></li>
+<li>optionally reuse a fixed value range for consistent color scaling across frames</li>
+</ul>
+<p>It is the single place where the volume inspection and preview logic are combined, so the export pipeline and the manual inspection path share the same behavior.</p>
+<pre><code class="language-python">analysis = hierarchy.analyze_field_data(fields=&quot;density&quot;, log=True)
+print(analysis[&quot;ranges&quot;][&quot;density&quot;])
+
+hierarchy.analyze_field_data(
+    fields=&quot;density&quot;,
+    output_path=&quot;density_slice.png&quot;,
+    log=True,
+    axis=0,
+    percentile=50,
+)
+</code></pre>
+<h3 id="field-ranges-stored-on-the-hierarchy">Field ranges stored on the hierarchy</h3>
+<p><code>load_volume(...)</code> computes and caches the global <code>(min, max)</code> values directly on the returned <code>FieldHierarchy</code> as <code>hierarchy.field_ranges</code>.</p>
+<p>This is the clean default for the volume API: once the hierarchy is loaded, the field range is attached to the object and can be reused for preview scaling, export, and Blender material setup.</p>
+<pre><code class="language-python">hierarchy = load_volume(ds, vtype=&quot;gas&quot;, fields=[&quot;density&quot;])
+print(hierarchy.field_ranges[&quot;density&quot;])
+</code></pre>
+<h3 id="export_volume_sequenceinput_dir-output_dir-fielddensity-vtypegas-preview_every10-logtrue-multi_vdbtrue-dict"><code>export_volume_sequence(input_dir, output_dir, field="density", vtype="gas", preview_every=10, log=True, multi_vdb=True) -&gt; dict</code></h3>
+<p>Loads a snapshot directory once, exports all frames to VDB folders, saves preview images every <code>preview_every</code> frames, and reports the final global field range for Blender.</p>
+<p>This is the simplest pathway when you want:
+- one backend pass over the snapshot files,
+- periodic preview images,
+- and one consistent <code>field_min</code> / <code>field_max</code> range for the Blender material.</p>
+<pre><code class="language-python">result = export_volume_sequence(&quot;snapshots&quot;, &quot;exports&quot;, field=&quot;density&quot;, multi_vdb=True)
+print(result[&quot;field_range&quot;])
+</code></pre>
+<h3 id="analyze_grid_structureds-gridstructurereport"><code>analyze_grid_structure(ds) -&gt; GridStructureReport</code></h3>
+<p>Inspects <code>ds.index.grids</code>, grouping by level and checking pairwise for overlap. Returns a report with:
+- levels present, grid counts per level, and <code>refine_by</code>
+- whether overlaps exist, and the overlapping pairs
+- a <strong>suggested <code>block_per_axis</code></strong> for the remap path, inferred from the finest level's grid count by <code>_infer_block_per_axis</code></p>
+<p>It's useful for inspecting a dataset's grid layout in detail.</p>
+<h2 id="exporting-to-vdb">Exporting to VDB</h2>
+<p>To bring a volume into Blender for volume rendering (rather than extracting a surface from it), export to <a href="https://www.openvdb.org/">OpenVDB</a> (<code>.vdb</code>) — a hierarchical, sparse volumetric format used across VFX/rendering tools (Blender, Houdini, ...) that Blender imports natively.</p>
+<h3 id="grid_to_vdbgrid_data-fielddensity-scale10-file_pathnone-logtrue"><code>grid_to_vdb(grid_data, field="density", scale=1.0, file_path=None, log=True)</code></h3>
+<p>Exports a single <code>GridBlock</code> field to one <code>.vdb</code> file. <code>log=True</code> applies <code>log10</code> (clipped away from zero) before export — suitable for density-like fields that span many orders of magnitude. If <code>file_path</code> is omitted, defaults to <code>Block_{block_id}.vdb</code>.</p>
+<h3 id="exporting-a-full-fieldhierarchy">Exporting a full <code>FieldHierarchy</code></h3>
+<p>Two options, differing in whether the hierarchy becomes one Blender object or many:</p>
+<h4 id="hierarchy_to_vdbhierarchy-fielddensity-file_name_prefixvolume-scale10-logtrue"><code>hierarchy_to_vdb(hierarchy, field="density", file_name_prefix="volume", scale=1.0, log=True)</code></h4>
+<p>Exports <strong>all levels, all blocks</strong> into a <strong>single</strong> <code>.vdb</code> file, one internal grid per block (named <code>density_l{level}_b{block_id}</code>). The whole <code>FieldHierarchy</code> becomes one Blender volume object made of nested internal grids.</p>
+<pre><code class="language-python">hierarchy_to_vdb(hierarchy, field=&quot;density&quot;, file_name_prefix=&quot;frame_0050&quot;)
+</code></pre>
+<h4 id="hierarchy_to_multiple_vdbshierarchy-fielddensity-file_name_prefixvolume-scale10-logtrue"><code>hierarchy_to_multiple_vdbs(hierarchy, field="density", file_name_prefix="volume", scale=1.0, log=True)</code></h4>
+<p>Writes <strong>one <code>.vdb</code> file per block</strong> (<code>{prefix}_l{level}_b{block_id}.vdb</code>) instead, and also tracks and prints the global min/max of the field across all blocks. Each <code>GridBlock</code> becomes an individually addressable Blender object.</p>
+<h3 id="single-file-vs-multiple-files">Single file vs. multiple files</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>hierarchy_to_vdb</code></th>
+<th><code>hierarchy_to_multiple_vdbs</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Blender result</td>
+<td>One volume object, nested internal grids</td>
+<td>One object per block</td>
+</tr>
+<tr>
+<td>Per-block visibility/toggling</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Required for animation via <code>volume_animation</code></td>
+<td>No — that module expects the multi-file (or <code>frame_*</code>-partitioned) layout</td>
+<td><strong>Yes</strong></td>
+</tr>
+<tr>
+<td>Applying one shader uniformly</td>
+<td>Simpler — one material assignment</td>
+<td>Needs <code>create_combined_grid_material</code> to merge blocks in-shader, or a shared field range (<code>hierarchy_to_multiple_vdbs</code>'s printed global min/max is for exactly this)</td>
+</tr>
+</tbody>
+</table>
+<p>Use <code>hierarchy_to_vdb</code> for a single static frame you want to treat as one cohesive object; use <code>hierarchy_to_multiple_vdbs</code> whenever you need per-block/per-level control, or whenever the output feeds into an animated sequence.</p>
+<h2 id="extracting-surfaces-from-a-volume">Extracting Surfaces from a Volume</h2>
+<p>Once you have a <code>GridBlock</code> (or a single block pulled from a <code>FieldHierarchy</code>), you can extract a mesh surface from it directly — useful for rendering a shock front or density threshold as a solid, rather than as a volume.</p>
+<h3 id="surfacedata"><code>SurfaceData</code></h3>
+<p>The resulting container.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vertices</code></td>
+<td><code>(N,3) ndarray</code></td>
+<td>Mesh vertices</td>
+</tr>
+<tr>
+<td><code>faces</code></td>
+<td><code>(M,3) ndarray</code></td>
+<td>Mesh faces</td>
+</tr>
+<tr>
+<td><code>normals</code></td>
+<td><code>(N,3) ndarray</code>, optional</td>
+<td>Per-vertex normals</td>
+</tr>
+</tbody>
+</table>
+<p>Also exposes <code>.N_vertices</code>, <code>.N_faces</code>.</p>
+<p>There are two extraction methods.</p>
+<h3 id="1-isosurface-extraction">1. Isosurface extraction</h3>
+<h3 id="grid_to_surfacegrid_data-threshold-fieldnone-build_objfalse-centertrue-scale10-plot_surfacetrue-axis0-slice_idxnone-surfacedata"><code>grid_to_surface(grid_data, threshold, field=None, build_obj=False, center=True, scale=1.0, plot_surface=True, axis=0, slice_idx=None) -&gt; SurfaceData</code></h3>
+<p>A marching-cubes isosurface at a given <code>threshold</code> value of <code>field</code> (via <code>skimage.measure.marching_cubes</code>).<br />
+Vertices are rescaled by <code>scale</code> and optionally recentered. <code>plot_surface=True</code> saves a diagnostic 2D slice with the isosurface threshold contour overlaid, for a quick visual check before committing to a full 3D extraction.<br />
+If <code>build_obj=True</code>, an <code>.obj</code> is also exported for direct import into Blender.</p>
+<pre><code class="language-python">block = hierarchy.levels[max(hierarchy.levels)].blocks[0]  # a single finest-level block
+surface = grid_to_surface(block, threshold=1.5, field=&quot;density&quot;)
+</code></pre>
+<h3 id="grid_to_surfacesgrid_data-threshold-fieldsnone-kwargs-dictstr-surfacedata"><code>grid_to_surfaces(grid_data, threshold, fields=None, **kwargs) -&gt; dict[str, SurfaceData]</code></h3>
+<p>Runs <code>grid_to_surface</code> across multiple fields (<code>str</code>, <code>list[str]</code>, or <code>None</code> for every field in the block), passing through any keyword arguments.</p>
+<h3 id="2-ridge-surface-extraction-grid_to_ridge_surfacegrid_data-fieldnone-sigma12-lambda_pct10-min_cluster_size250-normal_k20-grid_sigma15-isovalue_pct50-plot_checktrue-print_componentstrue-axis0-slice_idxnone-centertrue-scale10-build_objfalse-surfacedata">2. Ridge surface extraction <code>grid_to_ridge_surface(grid_data, field=None, sigma=1.2, lambda_pct=10, min_cluster_size=250, normal_k=20, grid_sigma=1.5, isovalue_pct=50, plot_check=True, print_components=True, axis=0, slice_idx=None, center=True, scale=1.0, build_obj=False) -&gt; SurfaceData</code></h3>
+<p>For extracting <strong>filament/ridge-like structures</strong> (e.g. shocks, dense filaments) rather than a fixed-value isosurface — useful when there isn't a single threshold that cleanly separates structure from background.</p>
+<h4 id="methodology_1">Methodology</h4>
+<ol>
+<li><strong>Ridge detection</strong> — Gaussian-smooths the field (<code>sigma</code>), computes the Hessian at every voxel, and finds voxels where the smallest eigenvalue <code>l3</code> is below a percentile threshold (<code>lambda_pct</code>) <em>and</em> less than the second eigenvalue <code>l2</code> (indicating a ridge rather than a blob or plane). Non-maximum suppression along the dominant eigenvector direction thins this into a 1-voxel-wide ridge.</li>
+<li><strong>Component filtering</strong> — connected-component labeling on the ridge voxels; components smaller than <code>min_cluster_size</code> are discarded as noise. Set <code>print_components=True</code> to see a size-ranked table of kept/discarded components.</li>
+<li><strong>Poisson surface reconstruction</strong> — estimates a normal vector at each ridge point via local PCA of its <code>normal_k</code> nearest neighbors (oriented outward from the point cloud centroid), splats the normal field onto the grid, smooths it (<code>grid_sigma</code>), and solves the Poisson equation for an implicit scalar field <code>chi</code> via FFT. The final surface is the <code>isovalue_pct</code> percentile isocontour of <code>chi</code>, extracted via marching cubes.</li>
+</ol>
+<p><code>plot_check=True</code> saves a 3-panel diagnostic (raw ridge, cleaned ridge, chi field + isocontour).<br />
+It is worth checking on a new field/dataset since <code>sigma</code>, <code>lambda_pct</code>, and <code>min_cluster_size</code> are dataset-dependent. </p>
+<p><code>build_obj=True</code> exports an <code>.obj</code>. </p>
+<h3 id="saving-the-surface">Saving the surface</h3>
+<p>You can save the surface into a .hdf5 file and prepare it for Blender.</p>
+<h3 id="savefile_path-data-modew-compressiongzip-compression_opts4"><code>save(file_path, data, mode="w", compression="gzip", compression_opts=4)</code></h3>
+<p><code>data</code> is <code>{object_name: instance_or_list_of_instances}</code> — a list represents animation frames, and must be a single consistent type per object.<br />
+<code>mode="a"</code> appends/replaces named objects while leaving other objects in an existing file untouched while <code>mode="w"</code> overwrites the whole file.</p>
+<pre><code class="language-python">save(&quot;stromgren_sphere.hdf5&quot;, {
+    &quot;OI_surface&quot;:       [OI_frame_0, OI_frame_1, ...],
+    &quot;OII_surface&quot;:      [OII_frame_0, OII_frame_1, ...],
+})
+</code></pre>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../../Blender/Animation_setup/"><code>Animation</code></a> — importing a VDB sequence produced here as an animated Blender volume</li>
+<li><a href="../Particle_Data/"><code>Particle_Data</code></a> — the SPH-native counterpart to this module</li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../Save_and_load/" class="btn btn-neutral float-left" title="Save and Load"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../../Blender/Animation_setup/" class="btn btn-neutral float-right" title="Animation Setup">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../Save_and_load/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../../Blender/Animation_setup/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

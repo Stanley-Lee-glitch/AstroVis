@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>Node and Shading - AstroVis</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Node and Shading";
+        var mkdocs_page_input_path = "Blender\\Node_and_shading.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> AstroVis
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../../Overview/">Home</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Backend</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Particle_Data/">Particle Data</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Save_and_load/">Save and Load</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../Backend/Volume_Data/">Volume Data</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">Blender</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../Animation_setup/">Animation Setup</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">Node and Shading</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#current-api-notes">Current API notes</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#shader-factories">Shader factories</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#create_volume_materialsspecies_names-field_attributedensity-species_colors_mapnone-emission_multiplier01-applytrue-dict">create_volume_materials(species_names, field_attribute="density", species_colors_map=None, emission_multiplier=0.1, apply=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#create_mesh_materialsspecies_names-base_colornone-emission_colornone-emission_strength015-applytrue-dict">create_mesh_materials(species_names, base_color=None, emission_color=None, emission_strength=0.15, apply=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#create_field_volume_materialspecies_names-fielddensity-field_min00-field_max10-emission_multiplier01-cmap_nameviridis-applytrue-dict">create_field_volume_material(species_names, field="density", field_min=0.0, field_max=1.0, emission_multiplier=0.1, cmap_name="viridis", apply=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#create_combined_grid_materialspecies_names-field_min00-field_max10-emission_multiplier01-cmap_nameviridis-applytrue-dict">create_combined_grid_material(species_names, field_min=0.0, field_max=1.0, emission_multiplier=0.1, cmap_name="viridis", apply=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#create_transparent_mesh_materialsspecies_names-refractive_index11-constrast_index00-10-base_colornone-emission_colornone-emission_strength5-applytrue-dict">create_transparent_mesh_materials(species_names, refractive_index=1.1, constrast_index=(0.0, 1.0), base_color=None, emission_color=None, emission_strength=5, apply=True) -&gt; dict</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology">Methodology</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#geometry-nodes-effects">Geometry Nodes effects</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#sph_point_to_volumeobj-attribute_namenone-material_namenone-voxel_size002-density02-math_multiplier003-bpytypesnodetree">sph_point_to_volume(obj, attribute_name=None, material_name=None, voxel_size=0.02, density=0.2, math_multiplier=0.03) -&gt; bpy.types.NodeTree</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#sph_point_to_meshobj-radius_attrnone-material_namenone-voxel_size03-density10-radius_multiplier11">sph_point_to_mesh(obj, radius_attr=None, material_name=None, voxel_size=0.3, density=1.0, radius_multiplier=1.1)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#selectobj-new_object_name-modeattribute-attribute_namenone-compare_valuenone-operationgreater-target_objnone-target_elementpoints-distance10-bpytypesobject">select(obj, new_object_name, mode="attribute", attribute_name=None, compare_value=None, operation="GREATER", target_obj=None, target_element="POINTS", distance=1.0) -&gt; bpy.types.Object</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#methodology_1">Methodology</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#see-also">See also</a>
+    </li>
+    </ul>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../Object_and_scene/">Object and Scene</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">AstroVis</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">Blender</li>
+      <li class="breadcrumb-item active">Node and Shading</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="blender-shading-and-geometry-nodes">Blender Shading and Geometry Nodes</h1>
+<p><em>Covers <code>Blender_Effect/material.py</code> and <code>Blender_Effect/node.py</code>. For object and scene helpers, see <a href="../Object_and_scene/"><code>Object_and_scene.md</code></a>.</em></p>
+<p>These modules sit on top of imported AstroVis data and handle the Blender-side presentation layer:</p>
+<ul>
+<li><strong><code>material.py</code></strong> builds shader node trees procedurally.</li>
+<li><strong><code>node.py</code></strong> builds Geometry Nodes modifiers for particle-to-volume/mesh conversion and selection.</li>
+</ul>
+<h3 id="current-api-notes">Current API notes</h3>
+<p>The Blender helpers intentionally favor names and object handles over raw data arrays. In practice, the public functions accept either:</p>
+<ul>
+<li>a Blender object such as <code>bpy.types.Object</code>,</li>
+<li>an object name string, or</li>
+<li>a list mixing those forms for batch operations.</li>
+</ul>
+<p>They normalize those inputs before creating or replacing materials and node groups so repeated calls overwrite old results instead of stacking duplicates. The naming pattern is consistent across the modules: generated object names, material names, and Geometry Nodes group names are all derived from the source species object name.</p>
+<h2 id="shader-factories">Shader factories</h2>
+<p>All material factories accept <code>species_names</code> as a single name, a <code>bpy.types.Object</code>, or a list mixing either form. Internally they normalize this via <code>_normalize_species_names</code>, rebuild any same-named material from scratch, and optionally apply the result directly to matching scene objects.</p>
+<h3 id="create_volume_materialsspecies_names-field_attributedensity-species_colors_mapnone-emission_multiplier01-applytrue-dict"><code>create_volume_materials(species_names, field_attribute="density", species_colors_map=None, emission_multiplier=0.1, apply=True) -&gt; dict</code></h3>
+<p>Creates one solid-color volume material per species. The field attribute drives <strong>emission strength</strong>, while color stays fixed per species.</p>
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>field_attribute</code></td>
+<td><code>"density"</code></td>
+<td>Named volume attribute read by the shader.</td>
+</tr>
+<tr>
+<td><code>species_colors_map</code></td>
+<td><code>None</code></td>
+<td>Optional <code>{species_name: (R, G, B, A)}</code> mapping; otherwise colors are auto-generated.</td>
+</tr>
+<tr>
+<td><code>emission_multiplier</code></td>
+<td><code>0.1</code></td>
+<td>Scales emission strength from the input attribute.</td>
+</tr>
+<tr>
+<td><code>apply</code></td>
+<td><code>True</code></td>
+<td>If true, assign each material to the matching object immediately.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="create_mesh_materialsspecies_names-base_colornone-emission_colornone-emission_strength015-applytrue-dict"><code>create_mesh_materials(species_names, base_color=None, emission_color=None, emission_strength=0.15, apply=True) -&gt; dict</code></h3>
+<p>Creates a plain Principled BSDF material per species for mesh objects.</p>
+<h3 id="create_field_volume_materialspecies_names-fielddensity-field_min00-field_max10-emission_multiplier01-cmap_nameviridis-applytrue-dict"><code>create_field_volume_material(species_names, field="density", field_min=0.0, field_max=1.0, emission_multiplier=0.1, cmap_name="viridis", apply=True) -&gt; dict</code></h3>
+<p>Creates the main data-driven volume shader. The named attribute is remapped through <code>[field_min, field_max]</code>, sampled through a matplotlib colormap, then used for emission color, emission strength, and gradual volume density so lower values stay more transparent.</p>
+<h3 id="create_combined_grid_materialspecies_names-field_min00-field_max10-emission_multiplier01-cmap_nameviridis-applytrue-dict"><code>create_combined_grid_material(species_names, field_min=0.0, field_max=1.0, emission_multiplier=0.1, cmap_name="viridis", apply=True) -&gt; dict</code></h3>
+<p>Builds one volume material for a <strong>single Blender volume object containing many internal VDB grids</strong>. Each internal grid gets its own attribute-driven sub-shader, and all sub-shaders are combined through an <code>AddShader</code> reduction tree.</p>
+<p>Use this with single-object multi-grid volumes produced by <code>hierarchy_to_vdb</code>, not with per-block imported objects from <code>hierarchy_to_multiple_vdbs</code>.</p>
+<h3 id="create_transparent_mesh_materialsspecies_names-refractive_index11-constrast_index00-10-base_colornone-emission_colornone-emission_strength5-applytrue-dict"><code>create_transparent_mesh_materials(species_names, refractive_index=1.1, constrast_index=(0.0, 1.0), base_color=None, emission_color=None, emission_strength=5, apply=True) -&gt; dict</code></h3>
+<p>Creates a Fresnel-driven transparent/emissive mesh shader. Head-on views remain more transparent while grazing angles become more visible and emissive.</p>
+<h3 id="methodology">Methodology</h3>
+<p>Most shader factories are composed from the same internal helpers:</p>
+<ul>
+<li><code>_add_attr_node</code> reads a named Blender attribute.</li>
+<li><code>_add_map_range</code> normalizes raw field values into <code>[0, 1]</code>.</li>
+<li><code>_add_color_ramp</code> turns normalized values into a colormap.</li>
+<li><code>_add_emission_math</code> scales brightness.</li>
+<li><code>_add_volume_principled</code> or <code>_add_principled_bsdf</code> emits the final shader branch.</li>
+</ul>
+<p><code>sample_matplotlib_cmap</code> provides the color stops, and <code>autogenerate_colors</code> provides fallback per-species colors when no explicit mapping is supplied.</p>
+<pre><code class="language-python">from AstroVis.api import create_field_volume_material
+
+create_field_volume_material(&quot;Gas&quot;, field=&quot;density&quot;, field_min=-5, field_max=1, cmap_name=&quot;inferno&quot;)
+</code></pre>
+<h2 id="geometry-nodes-effects">Geometry Nodes effects</h2>
+<h3 id="sph_point_to_volumeobj-attribute_namenone-material_namenone-voxel_size002-density02-math_multiplier003-bpytypesnodetree"><code>sph_point_to_volume(obj, attribute_name=None, material_name=None, voxel_size=0.02, density=0.2, math_multiplier=0.03) -&gt; bpy.types.NodeTree</code></h3>
+<p>Adds a Geometry Nodes modifier that converts a particle point cloud into a volume.</p>
+<ul>
+<li><code>obj</code> can be an object name or a <code>bpy.types.Object</code>.</li>
+<li>If <code>attribute_name</code> is provided, that named particle attribute is multiplied by <code>math_multiplier</code> and used as the point radius input.</li>
+<li><code>material_name</code> must already exist in <code>bpy.data.materials</code>.</li>
+</ul>
+<h3 id="sph_point_to_meshobj-radius_attrnone-material_namenone-voxel_size03-density10-radius_multiplier11"><code>sph_point_to_mesh(obj, radius_attr=None, material_name=None, voxel_size=0.3, density=1.0, radius_multiplier=1.1)</code></h3>
+<p>Adds a Geometry Nodes pipeline of <strong>Points to Volume → Volume to Mesh → Set Shade Smooth → Set Material</strong>, producing a renderable surface around the point cloud.</p>
+<h3 id="selectobj-new_object_name-modeattribute-attribute_namenone-compare_valuenone-operationgreater-target_objnone-target_elementpoints-distance10-bpytypesobject"><code>select(obj, new_object_name, mode="attribute", attribute_name=None, compare_value=None, operation="GREATER", target_obj=None, target_element="POINTS", distance=1.0) -&gt; bpy.types.Object</code></h3>
+<p>Duplicates <code>obj</code> and adds a Geometry Nodes selection modifier to the duplicate.</p>
+<p>Two selection modes are supported:</p>
+<ol>
+<li><strong><code>mode="attribute"</code></strong> — compare a named attribute against <code>compare_value</code> with <code>GREATER</code>, <code>LESS</code>, <code>EQUAL</code>, or <code>NOT_EQUAL</code>.</li>
+<li><strong><code>mode="proximity"</code></strong> — keep only points within <code>distance</code> of <code>target_obj</code>, measured against <code>POINTS</code>, <code>EDGES</code>, or <code>FACES</code>.</li>
+</ol>
+<h3 id="methodology_1">Methodology</h3>
+<p>The Geometry Nodes helpers all rely on <code>object.resolve_object</code> and <code>object.add_gn_modifer</code> first, so repeated calls replace prior node groups/modifiers of the same generated name instead of stacking duplicates.</p>
+<pre><code class="language-python">from AstroVis.api import sph_point_to_mesh
+
+sph_point_to_mesh(&quot;Dust&quot;, radius_attr=&quot;smoothing_length&quot;, material_name=&quot;Dust_meshmat&quot;)
+</code></pre>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../Animation_setup/"><code>Animation_setup</code></a> — import animated HDF5 and VDB data before applying these effects</li>
+<li><a href="../../Backend/Volume_Data/"><code>Volume_Data</code></a> — backend volume export paths that feed Blender volume materials</li>
+<li><a href="../Object_and_scene/"><code>Object_and_scene</code></a> — practical usage guide for <code>object.py</code> and <code>scene.py</code></li>
+</ul>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../Animation_setup/" class="btn btn-neutral float-left" title="Animation Setup"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../Object_and_scene/" class="btn btn-neutral float-right" title="Object and Scene">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../Animation_setup/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../Object_and_scene/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

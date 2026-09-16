@@ -1,10 +1,28 @@
 import os
 import bpy
-from typing import List, Optional
+from typing import List, Optional, Sequence, Union
 
 from .mesh_animation import setup_mesh_animation
 from .volume_animation import setup_volume_animation
 from ..Backend.save_load_hdf5 import load, get_summary
+
+
+def _resolve_mesh_object_names(object_names: Optional[Union[str, Sequence[str]]]) -> Optional[List[str]]:
+    if object_names is None:
+        return None
+    if isinstance(object_names, str):
+        return [object_names]
+    return list(object_names)
+
+
+def _resolve_volume_object_name(object_names: Optional[Union[str, Sequence[str]]]) -> str:
+    if object_names is None:
+        return "Volume"
+    if isinstance(object_names, str):
+        return object_names
+    if len(object_names) == 0:
+        return "Volume"
+    return object_names[0]
 
 
 def _find_hdf5_files(data_path: str) -> List[str]:
@@ -30,11 +48,12 @@ def _has_vdb_sequence(data_path: str) -> bool:
 
 def setup_animation(
     data_path: str,
-    object: Optional[List[str]] = None,
+    object: Optional[Union[str, List[str]]] = None,
     material: Optional[bpy.types.Material] = None,
     scale=None,
     target_size= 200,
     center=False,
+    suppress_vdb_warnings: bool = True,
 ):
     """
     Scan `data_path` for animation data and set it up in Blender.
@@ -53,7 +72,7 @@ def setup_animation(
     ----------
     data_path : str
         Folder containing the animation data described above.
-    object : list of str, optional
+    object : str or list of str, optional
         [HDF5] Restrict loading to these object names, applied across
         every HDF5 file found. Default: load every object in every file.
         [VDB] Used as a prefix for every created volume object.
@@ -61,7 +80,8 @@ def setup_animation(
         Applied to every created object. Compulsory for VDB sequence, optional for HDF5.
     scale, target_size, center :
         [HDF5 only] Forwarded to `setup_mesh_animation` for every object.
-
+    suppress_vdb_warnings : bool
+        [VDB only] Hide Blender/OpenVDB terminal warnings during scripted import.
     Returns
     -------
     dict
@@ -73,6 +93,7 @@ def setup_animation(
     if not os.path.isdir(data_path):
         raise FileNotFoundError(f"Path does not exist or is not a folder: {data_path}")
 
+    mesh_object_names = _resolve_mesh_object_names(object)
     hdf5_files = _find_hdf5_files(data_path)
     has_vdb = _has_vdb_sequence(data_path)
 
@@ -99,7 +120,7 @@ def setup_animation(
     # --- HDF5 -> mesh/particle/surface animation ---
     for hdf5_file in hdf5_files:
         file_path = os.path.join(data_path, hdf5_file)
-        data = load(file_path, object_names=object)
+        data = load(file_path, object_names=mesh_object_names)
 
         if scale is None and target_size is not None:
             max_size = max(
@@ -132,8 +153,9 @@ def setup_animation(
     if has_vdb:
         setup_volume_animation(
             data_path,
-            object = object_name[0] if object_name else "Volume",
+            object=_resolve_volume_object_name(object),
             material=material,
+            suppress_vdb_warnings=suppress_vdb_warnings,
         )
         results["volume"] = True
 

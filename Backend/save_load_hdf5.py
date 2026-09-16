@@ -112,6 +112,7 @@ def save(file_path, data, mode="w", compression="gzip", compression_opts=4):
                     obj_type = "Volume"
                     _dict_to_attr(frame_group, "unit", item.unit)
                     _dict_to_attr(frame_group, "field_units", item.field_units)
+                    _dict_to_attr(frame_group, "field_ranges", item.field_ranges)
 
                     levels_group = frame_group.create_group("levels")
                     for level_id, gridlevel in item.levels.items():
@@ -203,7 +204,8 @@ def load(file_path, object_names=None):
                 if obj_type == "Volume":
                     unit = _attr_to_dict(frame_group, "unit")
                     field_units = _attr_to_dict(frame_group, "field_units")
-                    fh = FieldHierarchy(unit=unit, field_units=field_units)
+                    field_ranges = _attr_to_dict(frame_group, "field_ranges") if "field_ranges" in frame_group.attrs else {}
+                    fh = FieldHierarchy(unit=unit, field_units=field_units, field_ranges=field_ranges)
 
                     levels_group = frame_group["levels"]
                     for level_key in _sorted_by_trailing_int(levels_group.keys()):

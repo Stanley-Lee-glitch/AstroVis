@@ -5,11 +5,20 @@ from .Backend.particle_data import (
 )
 
 from .Backend.volume_data import (
-    preview_field_slice,
     load_volume,
     GridBlock,
     GridLevel,
-    FieldHierarchy
+    FieldHierarchy,
+    analyze_field_data,
+)
+
+from .Backend.workflow import (
+    export_volume_vdb_sequence,
+    export_volume_surface_sequence,
+    export_volume_particle_sequence,
+    export_particle_vdb_sequence,
+    export_particle_surface_sequence,
+    export_particle_particle_sequence,
 )
 
 from .Backend.sph_particle_to_grid import (

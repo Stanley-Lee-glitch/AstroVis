@@ -5,11 +5,27 @@ from .Backend.particle_data import (
 )
 
 from .Backend.volume_data import (
-    preview_field_slice,
     load_volume,
     GridBlock,
     GridLevel,
-    FieldHierarchy
+    FieldHierarchy,
+    get_field_value_ranges,
+    analyze_field_data,
+)
+
+from .Backend.workflow import (
+    export_volume_vdb_sequence,
+    export_volume_surface_sequence,
+    export_volume_particle_sequence,
+    export_particle_vdb_sequence,
+    export_particle_surface_sequence,
+    export_particle_particle_sequence,
+)
+
+from .Backend.grid_to_vdb import (
+    grid_to_vdb,
+    hierarchy_to_vdb,
+    hierarchy_to_multiple_vdbs,
 )
 
 from .Backend.surface_data import SurfaceData
@@ -37,7 +53,3 @@ from .Backend.save_load_hdf5 import (
     validate
 )
 
-
-from .Backend.grid_remap import (
-    load_remap_amr_volume
-)

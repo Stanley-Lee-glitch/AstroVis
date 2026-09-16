@@ -1,0 +1,18 @@
+site_name: AstroVis
+site_description: AstroVis documentation for astrophysical simulation visualization in Blender
+docs_dir: Documentation
+site_dir: site
+
+nav:
+  - Home: Overview.md
+  - Backend:
+      - Particle Data: Backend/Particle_Data.md
+      - Save and Load: Backend/Save_and_load.md
+      - Volume Data: Backend/Volume_Data.md
+  - Blender:
+      - Animation Setup: Blender/Animation_setup.md
+      - Node and Shading: Blender/Node_and_shading.md
+      - Object and Scene: Blender/Object_and_scene.md
+
+theme:
+  name: readthedocs

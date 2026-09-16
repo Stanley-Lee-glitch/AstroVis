@@ -68,11 +68,14 @@ def set_object_shader(obj: bpy.types.Object | str,
         
     else:
         trial = [m for m in bpy.data.materials if obj.name in m.name]
-        print("All matching materials:", [m.name for m in trial], "for object:", obj.name, "Applied the first one.")
-        mat = trial[0]
-        
-        if mat is None:
+        print("All matching materials:", [m.name for m in trial], "for object:", obj.name)
+
+        if not trial:
+            mat = None
             print(f"No matching material found containing '{obj.name}'.")
+        else:
+            mat = trial[0]
+            print(f"Applied the first one: '{mat.name}'.")
         
     if mat is not None:
         obj.data.materials.clear()
