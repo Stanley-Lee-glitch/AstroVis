@@ -11,7 +11,7 @@ theme:
 docs_dir: Documentation
 
 nav:
-  - Overview: Overview.md
+  - Home: index.md
   - Backend:
       - Particle Data: Backend/Particle_Data.md
       - Volume Data: Backend/Volume_Data.md
