@@ -1,18 +1,22 @@
-site_name: AstroVis
-site_description: AstroVis documentation for astrophysical simulation visualization in Blender
+site_name: AstroVis Documentation
+site_url: https://Stanley-Lee-glitch.github.io/AstroVis/
+repo_url: https://github.com/Stanley-Lee-glitch/AstroVis
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - search.suggest
+
 docs_dir: Documentation
-site_dir: site
 
 nav:
-  - Home: Overview.md
+  - Overview: Overview.md
   - Backend:
       - Particle Data: Backend/Particle_Data.md
-      - Save and Load: Backend/Save_and_load.md
       - Volume Data: Backend/Volume_Data.md
+      - Save and Load: Backend/Save_and_load.md
   - Blender:
       - Animation Setup: Blender/Animation_setup.md
       - Node and Shading: Blender/Node_and_shading.md
       - Object and Scene: Blender/Object_and_scene.md
-
-theme:
-  name: readthedocs
