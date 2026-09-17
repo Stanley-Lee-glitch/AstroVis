@@ -31,14 +31,15 @@ Table \ref {tab:comparison} summarizes how AstroVis compares against representat
 
 | Capability | AstroVis | `yt` / ParaView / VisIt | AstroBlend | Houdini-astro | 3D Slicer (cube) |
 |---|---|---|---|---|---|
-| particle-based snapshot | ✓ | ✓ | ✓ | ~ | — |
-| grid-based snapshot | ✓ | ✓ | ~ | ✓| — |
-| Native sparse volume export (OpenVDB) | ✓ | — | — | ✓ | — |
-| Feature Extraction | ✓ | ✓ | ~ | ~ | ~ |
-| Ray-traced rendering | ✓ | — | ✓ | ✓ | — |
-| Field-driven shading | ✓ | ✓ | ~ | ~ | — |
-| 3D Animation | ✓ | ~ | ✓ | ✓ | — |
-| Open-source| ✓ | ✓ | ✓ | — | ✓ |
+| Particle-based snapshot input | ✓ | ✓ | ✓ | ✓ | — |
+| Grid-based snapshot input | ✓ | ✓ | ~ | ✓ | — |
+| Volume Rendering | ✓ | ✓ | — | ✓ | ✓ |
+| Feature extraction | ✓ | ✓ | ~ | ~ | ~ |
+| Physically-based ray-traced rendering | ✓ | ~ | ✓ | ✓ | — |
+| Field-driven color mapping | ✓ | ✓ | ~ | ~ | — |
+| Multi-frame 3D animation | ✓ | ~ | ✓ | ✓ | — |
+| Interactive Visualization |✓ | — | ✓ | ✓ | ✓ |
+| Open-source | ✓ | ✓ | ✓ | — | ✓ |
 
 Table: Comparison of AstroVis against representative tools in each paradigm. ✓ indicates full/native support, ~ indicates partial or workaround support, — indicates no support. \label{tab:comparison}
 
