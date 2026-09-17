@@ -9,8 +9,6 @@ from .Backend.volume_data import (
     GridBlock,
     GridLevel,
     FieldHierarchy,
-    get_field_value_ranges,
-    analyze_field_data,
 )
 
 from .Backend.workflow import (

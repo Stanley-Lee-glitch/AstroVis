@@ -156,9 +156,9 @@ scene.set_render(engine="CYCLES", samples=128, resolution=(1920, 1080))
 ## Next steps
 
 The steps above cover the common path end-to-end. If you need to:
-- inspect or filter a dataset before exporting (regions, AMR levels, per-field ranges),
 - convert between particle/grid/surface representations manually,
 - control per-frame thresholds, materials, or Geometry Nodes effects individually,
+- export data with combined pipeline
 
 ...the lower-level API for each of these is documented per-module:
 

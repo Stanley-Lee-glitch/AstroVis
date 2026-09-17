@@ -90,6 +90,7 @@ def _collect_snapshot_files(
 def export_volume_vdb_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     field: str = "density",
     vtype: str = "gas",
     preview_every: Optional[int] = 10,
@@ -104,6 +105,8 @@ def export_volume_vdb_sequence(
     snapshot_files = _collect_snapshot_files(input_dir)
     if not snapshot_files:
         raise ValueError(f"No supported snapshot files found in: {input_dir}")
+    if num_snapshot is not None:
+        snapshot_files = snapshot_files[:num_snapshot]
     snapshot_names = [os.path.basename(path) for path in snapshot_files]
 
     os.makedirs(output_dir, exist_ok=True)
@@ -157,6 +160,8 @@ def export_volume_vdb_sequence(
         )
         preview_paths.append(preview_path)
 
+    print(f"Use field_min={field_range[0]:.6g} and field_max={field_range[1]:.6g} in Blender.")
+
     return {
         "field": field,
         "field_range": field_range,
@@ -168,6 +173,7 @@ def export_volume_vdb_sequence(
 def export_volume_surface_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     field: str = "density",
     vtype: str = "gas",
     threshold: Optional[float] = None,
@@ -199,6 +205,8 @@ def export_volume_surface_sequence(
     )
     if not snapshot_names:
         raise ValueError(f"No supported volume snapshot files found in: {input_dir}")
+    if num_snapshot is not None:
+        snapshot_names = snapshot_names[:num_snapshot]
 
     def _merge_surface_blocks(surfaces):
         if not surfaces:
@@ -292,6 +300,7 @@ def export_volume_surface_sequence(
 def export_volume_particle_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     field: str = "density",
     vtype: str = "gas",
     **kwargs,
@@ -305,6 +314,7 @@ def export_volume_particle_sequence(
 def export_particle_vdb_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     ptype: str = "stars",
     fields: Optional[Union[str, List[str]]] = None,
     res: int = 256,
@@ -327,6 +337,8 @@ def export_particle_vdb_sequence(
     )
     if not snapshot_names:
         raise ValueError(f"No supported particle snapshot files found in: {input_dir}")
+    if num_snapshot is not None:
+        snapshot_names = snapshot_names[:num_snapshot]
 
     os.makedirs(output_dir, exist_ok=True)
     exports = []
@@ -367,6 +379,7 @@ def export_particle_vdb_sequence(
 def export_particle_surface_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     ptype: str = "stars",
     fields: Optional[Union[str, List[str]]] = None,
     res: int = 256,
@@ -391,6 +404,8 @@ def export_particle_surface_sequence(
     )
     if not snapshot_names:
         raise ValueError(f"No supported particle snapshot files found in: {input_dir}")
+    if num_snapshot is not None:
+        snapshot_names = snapshot_names[:num_snapshot]
 
     os.makedirs(output_dir, exist_ok=True)
     exports = []
@@ -444,6 +459,7 @@ def export_particle_surface_sequence(
 def export_particle_particle_sequence(
     input_dir: str,
     output_dir: str,
+    num_snapshot: Optional[int] = None,
     ptype: str = "stars",
     fields: Optional[Union[str, List[str]]] = None,
     **kwargs,
@@ -459,6 +475,8 @@ def export_particle_particle_sequence(
     )
     if not snapshot_names:
         raise ValueError(f"No supported particle snapshot files found in: {input_dir}")
+    if num_snapshot is not None:
+        snapshot_names = snapshot_names[:num_snapshot]
 
     os.makedirs(output_dir, exist_ok=True)
     exports = []

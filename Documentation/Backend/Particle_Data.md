@@ -4,6 +4,49 @@
 
 Particle data refers to simulation snapshots produced by **Smoothed Particle Hydrodynamics (SPH)** codes, which represent a fluid as a set of discrete particles rather than a fixed grid. Each particle carries a position, mass, and a *smoothing length* — the radius over which its contribution is spread. [SWIFT](https://swift.strw.leidenuniv.nl/) is one example of an SPH code, and is used as the running example throughout this page.
 
+## Overview of the Particle Data Pipeline
+
+If you just want to go from a directory of SPH snapshots to Blender-ready files, `Backend/workflow.py` wraps the whole particle pipeline (`load_particles` → `sph_to_grid` → export) into single function calls. This is the fastest path — see the [Readme Quickstart](../../Readme.md#quickstart) for a minimal end-to-end example.
+
+### ```export_particle_vdb_sequence(input_dir, output_dir, ptype="stars", fields=None, res=256, field="density", log=True, intensive=True, center=True, scale=1.0, multi_vdb=True) -> dict```
+
+Loads every snapshot in `input_dir`, converts particles of type `ptype` to a grid via `sph_to_grid`, and exports each frame's `field` to VDB (via `grid_to_vdb`, one file per block if `multi_vdb=True`).
+
+```python
+from AstroVis.backend import export_particle_vdb_sequence
+
+result = export_particle_vdb_sequence(
+    "snapshots", "exports",
+    ptype="gas", field="density", res=256,
+)
+```
+
+### ```export_particle_surface_sequence(input_dir, output_dir, ptype="stars", fields=None, res=256, field="density", threshold=None, log=True, intensive=True, center=True, scale=1.0) -> dict```
+
+Same particle → grid conversion, but extracts an isosurface (`grid_to_surface`) instead of exporting a volume, and saves each frame's surface into `frame_NNNN/surface.h5`. If `threshold` is left `None`, each frame auto-computes its own threshold as the mean of that frame's field range.
+
+```python
+from AstroVis.backend import export_particle_surface_sequence
+
+export_particle_surface_sequence(
+    "snapshots", "exports",
+    ptype="gas", field="density", threshold=0.5,
+)
+```
+
+### ```export_particle_particle_sequence(input_dir, output_dir, ptype="stars", fields=None) -> dict```
+
+No grid conversion — just loads particles per snapshot with `load_particles` and saves each frame into `frame_NNNN/particles.h5`, ready for `setup_mesh_animation`/`setup_animation` to animate the raw point cloud directly.
+
+```python
+from AstroVis.backend import export_particle_particle_sequence
+
+export_particle_particle_sequence("snapshots", "exports", ptype="stars")
+```
+
+All three expect snapshot files directly under `input_dir` ending in `.athdf`, `.hdf5`, or `.h5`, and create one `frame_NNNN/` subfolder per snapshot under `output_dir`, numbered in file order.
+
+
 ## Data Structures
 
 ### `SPHParticleData`

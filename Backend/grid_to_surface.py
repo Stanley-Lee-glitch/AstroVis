@@ -23,6 +23,7 @@ def grid_to_surface(
     plot_surface: bool = True,
     axis        : int  = 0,
     slice_idx   : int  = None,
+    path        : str  = None,
 ) -> SurfaceData:
     """
     Extract an isosurface from a single 3D grid field using marching cubes.
@@ -82,9 +83,10 @@ def grid_to_surface(
         plt.colorbar(im, ax=ax)
         ax.set_title(f"Isosurface Extraction  |  field='{field}'  index={s_idx}\nthreshold={threshold}")
         plt.tight_layout()
-        plt.savefig(f"{field}_isosurface.png", dpi=150)
+        output_path = path if path is not None else f"{field}_isosurface.png"
+        plt.savefig(output_path, dpi=150)
         plt.show()
-        print(f"  Saved        : {field}_isosurface.png")
+        print(f"  Saved        : {output_path}")
 
     print(f"{'='*50}\n")
     return SurfaceData(vertices=verts, faces=faces, normals=normals)
@@ -144,6 +146,7 @@ def grid_to_ridge_surface(
     isovalue_pct     = 50,     # 50=median. Lower=expand surface, Higher=shrink
     # --- Quick Checks ---
     plot_check       = True,   # If True, plot all three diagnostic figures: raw ridge, cleaned ridge, chi+contour
+    path             = None,   # If not None, save the diagnostic figure to this path
     print_components = True,   # Print component size table after filtering
     axis             = 0,      # Axis to slice diagnostic plots along: 'x', 'y', or 'z'
     slice_idx        = None,   # Index along `axis` for diagnostic plots (default: middle)
@@ -382,9 +385,11 @@ def grid_to_ridge_surface(
         axes[2].set_title(f"Step 3: Chi Field + Isocontour\nisovalue={isovalue:.4f} (pct={isovalue_pct})")
 
         plt.tight_layout()
-        plt.savefig(f"{field}_ridge_surface.png", dpi=150)
+        
+        output_path = path if path is not None else f"{field}_ridge_surface.png"
+        plt.savefig(output_path, dpi=150)
         plt.show()
-        print(f"  Saved        : {field}_ridge_surface.png")
+        print(f"  Saved        : {output_path}")
         print(f"  {'='*50}\n")
 
     return SurfaceData(vertices=verts, faces=faces)

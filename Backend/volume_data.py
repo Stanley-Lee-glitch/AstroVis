@@ -315,7 +315,11 @@ class FieldHierarchy:
                         slice_2d, cmap='viridis', origin='lower',
                         extent=extent, vmin=vmin, vmax=vmax,
                     )
+                    
+                ax_img.set_xlim(all_left[col_axis], all_right[col_axis])
+                ax_img.set_ylim(all_left[row_axis], all_right[row_axis])
                 ax_img.set_title(f"{field_name} | axis={axis}")
+                
                 ax_img.set_xlabel(['x', 'y', 'z'][col_axis])
                 ax_img.set_ylabel(['x', 'y', 'z'][row_axis])
 

@@ -8,14 +8,15 @@ Volume data refers to simulation snapshots produced by **grid-based** codes, oft
 
 The recommended reading order is: start with the one-shot export example, then drill down into the lower-level API if you need finer control. The high-level export path is the simplest way to go from a snapshot directory to Blender-friendly VDB files, while the lower-level routines are still kept available for custom inspection and manual pipeline building.
 
-### A high-level pipeline: `export_volume_sequence(...)`
+### A high-level pipeline: `export_volume_vdb_sequence(...)` and `export_volume_surface_sequence(...)`
 
-This is the integrated workflow for turning a snapshot directory into VDB files for Blender animation.
+These are the integrated workflows for turning a snapshot directory into Blender-ready files in one call. See also the [Readme Quickstart](../../Readme.md#quickstart) for the full end-to-end example including the Blender-side import.
 
+**Volume → VDB sequence**, for volume rendering:
 ```python
-from AstroVis import export_volume_sequence
+from AstroVis.backend import export_volume_vdb_sequence
 
-result = export_volume_sequence(
+result = export_volume_vdb_sequence(
     input_dir="snapshots",
     output_dir="exports",
     field="density",
@@ -28,6 +29,22 @@ result = export_volume_sequence(
 print(result["field_range"])      # global (min, max) used for material scaling
 print(result["preview_paths"])    # saved preview PNGs for sampled frames
 ```
+
+**Volume → surface HDF5 sequence**, for isosurface rendering instead of a volume:
+```python
+from AstroVis.backend import export_volume_surface_sequence
+
+export_volume_surface_sequence(
+    input_dir="snapshots",
+    output_dir="exports",
+    field="density",
+    vtype="gas",
+    threshold=None,   # auto-computed once from the first frame, then reused for all frames
+)
+```
+> **Note:** this function is marked `status: "immature_amr_merge_prototype"` in its return dict — it stitches together per-block surfaces from a (possibly remapped) AMR hierarchy, and hasn't been validated across a wide range of AMR layouts. Treat the merged surface as a starting point, not a guaranteed-watertight mesh.
+
+
 Use this as the default entry point when you want the whole volume-export workflow; the lower-level tools below are there for custom inspection or specialized processing.
 
 What it does internally:
