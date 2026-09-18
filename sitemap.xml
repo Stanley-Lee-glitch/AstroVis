@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Backend/Particle_Data/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Backend/Save_and_load/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Backend/Volume_Data/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Blender/Animation_setup/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Blender/Node_and_shading/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+    <url>
+         <loc>https://Stanley-Lee-glitch.github.io/AstroVis/Blender/Object_and_scene/</loc>
+         <lastmod>2026-09-18</lastmod>
+    </url>
+</urlset>
