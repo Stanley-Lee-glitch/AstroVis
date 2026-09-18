@@ -333,6 +333,7 @@ class FieldHierarchy:
             fig.savefig(output_path, dpi=180)
             plt.close(fig)
             preview = {"path": output_path, "axis": axis, "slice_pos": slice_pos}
+            print(f"  Preview saved to: {output_path}  |  axis={axis}  |  slice_pos={slice_pos:.4g}")
 
         return {
             "fields": valid_fields,

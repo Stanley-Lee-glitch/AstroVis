@@ -94,14 +94,17 @@ def export_volume_vdb_sequence(
     field: str = "density",
     vtype: str = "gas",
     preview_every: Optional[int] = 10,
+    preview_dir: Optional[str] = None,
     log: bool = True,
     multi_vdb: bool = True,
 ) -> Dict[str, object]:
+    
     """Volume snapshot directory -> VDB sequence + preview output."""
     import yt
     from .volume_data import load_volume
     from .grid_to_vdb import hierarchy_to_multiple_vdbs, hierarchy_to_vdb
 
+    # 1. Loading and sorting snapshot files
     snapshot_files = _collect_snapshot_files(input_dir)
     if not snapshot_files:
         raise ValueError(f"No supported snapshot files found in: {input_dir}")
@@ -109,15 +112,23 @@ def export_volume_vdb_sequence(
         snapshot_files = snapshot_files[:num_snapshot]
     snapshot_names = [os.path.basename(path) for path in snapshot_files]
 
+    ## Configuration 
     os.makedirs(output_dir, exist_ok=True)
     preview_samples = []
     global_min = float("inf")
     global_max = float("-inf")
 
     for frame_num, snapshot_name in enumerate(snapshot_names):
-        ds = yt.load(os.path.join(input_dir, snapshot_name))
-        hierarchy = load_volume(ds, vtype=vtype, fields=[field])
+        try:
+            # 2. Load the dataset and convert it to a volume hierarchy
+            ds = yt.load(os.path.join(input_dir, snapshot_name))
+            hierarchy = load_volume(ds, vtype=vtype, fields=[field])
+            
+        except Exception as e:
+            print(f"  [ERROR] Failed to process snapshot '{snapshot_name}': {e}")
+            continue
 
+        # 3. Tracking min/max values
         analysis = hierarchy.analyze_field_data(fields=field, log=log)
         current_range = analysis["ranges"]
         if field not in current_range:
@@ -127,12 +138,14 @@ def export_volume_vdb_sequence(
         global_min = min(global_min, field_min)
         global_max = max(global_max, field_max)
 
+        # 4. Generate preview images
         if preview_every is not None and preview_every > 0 and (frame_num % preview_every) == 0:
             preview_samples.append((frame_num, hierarchy))
 
         frame_dir = os.path.join(output_dir, f"frame_{frame_num:04d}")
         os.makedirs(frame_dir, exist_ok=True)
 
+        # 5. Convert to VDB 
         if multi_vdb:
             hierarchy_to_multiple_vdbs(
                 hierarchy,
@@ -149,23 +162,27 @@ def export_volume_vdb_sequence(
             )
 
     field_range = (global_min, global_max)
-    preview_paths = []
+    
+    ## 6. Generate preview images for selected frames after finding global min/max
     for frame_num, hierarchy in preview_samples:
-        preview_path = os.path.join(output_dir, f"preview_{frame_num:04d}.png")
+        if preview_dir is None:
+            preview_path = os.path.join(output_dir, f"preview_{frame_num:04d}.png")
+        else:
+            os.makedirs(preview_dir, exist_ok=True)
+            preview_path = os.path.join(preview_dir, f"preview_{frame_num:04d}.png")
+
         hierarchy.analyze_field_data(
             fields=field,
             output_path=preview_path,
             log=log,
             value_ranges={field: field_range},
         )
-        preview_paths.append(preview_path)
 
     print(f"Use field_min={field_range[0]:.6g} and field_max={field_range[1]:.6g} in Blender.")
 
     return {
         "field": field,
         "field_range": field_range,
-        "preview_paths": preview_paths,
         "snapshot_count": len(snapshot_names),
     }
 
