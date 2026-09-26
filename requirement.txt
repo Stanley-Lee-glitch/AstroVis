@@ -1,0 +1,13 @@
+# Core dependencies for AstroVis
+
+# NOTE: This does NOT include `openvdb`. That package is only needed if you
+# plan to use the VDB volume-export functions in backend.py 
+ 
+numpy==2.2.5
+h5py==3.13.0
+scipy==1.15.3
+scikit-image==0.26.0
+trimesh==4.11.1
+matplotlib==3.10.3
+numba==0.61.2
+yt==4.4.2
