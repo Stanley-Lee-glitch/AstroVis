@@ -52,6 +52,7 @@ def _add_map_range(
     to_max: float = 1.0,
     clamp: bool = True,
     location: tuple = (-550, 0),
+    interpolation: str = "SMOOTHERSTEP" 
 ) -> bpy.types.Node:
     node = nt.nodes.new("ShaderNodeMapRange")
     node.location = location
@@ -60,6 +61,8 @@ def _add_map_range(
     node.inputs["From Max"].default_value = from_max
     node.inputs["To Min"].default_value = to_min
     node.inputs["To Max"].default_value = to_max
+    node.interpolation_type = interpolation
+
     return node
 
 

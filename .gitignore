@@ -4,10 +4,13 @@
 
 /Paper
 /Output
-*.athdf
-*.hdf5
-*.vdb
+**/*.athdf
+**/*.hdf5
+**/*.vdb
+
 *.out
 *.err
 *.blend 
 *.png 
+*.xmf
+*.zip

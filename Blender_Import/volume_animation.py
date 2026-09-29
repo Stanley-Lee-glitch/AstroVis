@@ -166,7 +166,7 @@ def setup_volume_animation(
         ## Import VDB files for this frame
         for filepath in filepaths:
             filename = os.path.splitext(os.path.basename(filepath))[0]
-            name = f"{object}_{filename}" if object else filename
+            name = f"{filename}" 
 
             obj = _import_volume_object(filepath, name, suppress_vdb_warnings)
             set_object_shader(obj, material)

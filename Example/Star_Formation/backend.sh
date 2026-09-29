@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=star_formation
-#SBATCH --output=star_formation_%j.out
-#SBATCH --error=star_formation_%j.err
+#SBATCH --job-name=star_formation_backend
+#SBATCH --output=star_formation_backend_%j.out
+#SBATCH --error=star_formation_backend_%j.err
 #SBATCH --mem=64G
 
 

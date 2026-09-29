@@ -120,6 +120,7 @@ def hierarchy_to_multiple_vdbs(
                 
     print(f"\n{'='*50}")
     print(f"Exporting hierarchy to multiple VDB files with prefix '{file_name_prefix}'")
+    print(f"Scale: {scale}")
     if log:
         print("Applying log scale to the data.")
         

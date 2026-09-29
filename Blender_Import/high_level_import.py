@@ -17,8 +17,8 @@ def _infer_vdb_object_name(vdb_dir: str) -> Optional[str]:
     "Output" or "Output.zip" -> extracted "Output/").
 
     Handles both filename conventions grid_to_vdb produces:
-      - "{object_name}.vdb"                      (single-block / particle case)
-      - "{object_name}_l{level}_b{block_id}.vdb"  (AMR hierarchy case, from
+      - "{object_name}_frame{frame_number}.vdb"                      (single-block / particle case)
+      - "{object_name}_frame{frame_number}_l{level}_b{block_id}.vdb"  (AMR hierarchy case, from
                                                      hierarchy_to_multiple_vdbs)
 
     Searches the first directory level (flat layout, or the first frame_*/
@@ -61,34 +61,44 @@ def resolve_and_scan_dataset(data_path: str) -> Dict[str, Any]:
         if data_path.lower().endswith(".zip"):
             scan_dir = _extract_zip(data_path)
             vdb_dirs_path.append(scan_dir)          
+            print(f"Found one VDB zip archive: {os.path.abspath(data_path)} -> extracted to {scan_dir}")
         elif data_path.lower().endswith((".h5", ".hdf5")):
             scan_dir = os.path.abspath(os.path.dirname(data_path))
             hdf5_files_path.append(os.path.abspath(data_path))
+            print(f"Found one HDF5 file: {os.path.abspath(data_path)}")
         else:
             raise ValueError(f"Unsupported file type: {data_path}")
 
     elif os.path.isdir(data_path):
         scan_dir = os.path.abspath(data_path)
         for root, dirs, files in os.walk(scan_dir):
+            if Path(root).name.startswith("frame_"):
+                continue
             
             ## If root is one vdb object
             if any(d.lower().startswith("frame_") for d in dirs) or any(f.lower().endswith(".vdb") for f in files):
                 vdb_dirs_path.append(os.path.abspath(root))
+                print(f"Found one VDB dir: {os.path.abspath(root)}")
                 continue
             
             ## If root contains .h5/.hdf5 files or .zip archives, add them to the list
             for file in files:
                 if file.lower().endswith((".h5", ".hdf5")):
                     hdf5_files_path.append(os.path.abspath(os.path.join(root, file)))
+                    print(f"Found one HDF5 file: {os.path.abspath(os.path.join(root, file))}")
                 if file.lower().endswith(".zip"):
-                    vdb_dirs_path.append(_extract_zip(os.path.join(root, file)))  
+                    vdb_dirs_path.append(_extract_zip(os.path.join(root, file)))
+                    print(f"Found one VDB zip archive: {os.path.abspath(os.path.join(root, file))} -> extracted to {vdb_dirs_path[-1]}")
 
             ## If root stored multiple vdb objects in subfolders, check subfolders for vdb files
             for d in dirs:
+                if d.lower().startswith("frame_"):
+                    continue  # skip frame_* subfolders, they are part of a vdb object already found
                 dir_path = os.path.join(root, d)
                 entries = os.listdir(dir_path)
                 if any(f.lower().endswith(".vdb") for f in entries) or any(f.lower().startswith("frame_") for f in entries):
                     vdb_dirs_path.append(os.path.abspath(dir_path))
+                    print(f"Found one VDB dir: {os.path.abspath(dir_path)}")
 
     else:
         raise ValueError(f"Path does not exist: {data_path}")
