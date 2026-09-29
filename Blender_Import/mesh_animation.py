@@ -66,6 +66,8 @@ def setup_mesh_animation(
     scale = None,
     target_size = 200,
     center=False,
+    start_frame: int = 0,
+    end_frame: int = None,
     material: Optional[bpy.types.Material] = None,
 ):
     """
@@ -138,8 +140,8 @@ def setup_mesh_animation(
        
     # Set scene frame range
     scene = bpy.context.scene
-    scene.frame_start = 0
-    scene.frame_end = num_frames - 1
+    scene.frame_start = start_frame
+    scene.frame_end = end_frame if end_frame is not None else num_frames - 1
 
     print(f"  Frame range: {scene.frame_start} to {scene.frame_end}")
     print(f"  Material: {material.name if material else 'none'}")
@@ -152,6 +154,7 @@ def setup_mesh_animation(
             return
 
         frame = frames_data[f]
+        scene.frame_current = f + start_frame
 
         if isinstance(frame, SPHParticleData):
             particle_frame_update(frame, mesh, scale, center)

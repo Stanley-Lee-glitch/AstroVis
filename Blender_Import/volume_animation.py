@@ -97,16 +97,16 @@ def _import_volume_object(filepath: str, name: str, suppress_vdb_warnings: bool)
     if imported_objects:
         _cleanup_imported_objects(imported_objects)
 
-    return _create_volume_object_from_filepath(filepath, name)
+    return _create_volume_object_from_filepath(filepath, name=name)
 
 
 def setup_volume_animation(
     vdb_folder: str,
-    object: str = "Volume",
+    object_name: str = "Volume",
     material: bpy.types.Material = None,
-    scale: float = None,
-    target_size: float = None,
     suppress_vdb_warnings: bool = True,
+    start_frame: int = 0,
+    end_frame: int = None
     ):
     """
     Sets up volume animation in Blender by importing VDB files per frame and
@@ -132,7 +132,8 @@ def setup_volume_animation(
 
     ## Construct frame to filepaths mapping
     if multi_vdb_per_frame:
-        for frame_num, subfolder in enumerate(subfolders):
+        for subfolder in subfolders:
+            frame_num = int(subfolder.split("_")[1]) ## format: frame_000, frame_001, etc.
             current_frame_folder = os.path.join(vdb_folder, subfolder)
             vdb_files = sorted([f for f in os.listdir(current_frame_folder) if f.endswith(".vdb")])
 
@@ -140,7 +141,8 @@ def setup_volume_animation(
                 frame_to_filepaths[frame_num] = [os.path.join(current_frame_folder, f) for f in vdb_files]
     else:
         vdb_files = sorted([f for f in os.listdir(vdb_folder) if f.endswith(".vdb")])
-        for frame_num, vdb_file in enumerate(vdb_files):
+        for vdb_file in vdb_files:
+            frame_num = int(os.path.splitext(vdb_file)[0].split("_")[-1]) ## format: volume_000.vdb
             frame_to_filepaths[frame_num] = [os.path.join(vdb_folder, vdb_file)]
 
     if not frame_to_filepaths:
@@ -157,6 +159,10 @@ def setup_volume_animation(
     print(f"{'-'*50}")
 
     for frame_num, filepaths in sorted(frame_to_filepaths.items()):
+        if start_frame is not None and frame_num < start_frame:
+            continue
+        if end_frame is not None and frame_num > end_frame:
+            continue
         print(f"Processing Frame {frame_num:03d}: Importing {len(filepaths)} VDB partitions...")
         
         ## Create collection for this frame
@@ -170,19 +176,7 @@ def setup_volume_animation(
 
             obj = _import_volume_object(filepath, name, suppress_vdb_warnings)
             set_object_shader(obj, material)
-             
-            if scale is not None:
-                obj.scale = (scale, scale, scale)
-                print(f"  Applied scale factor: {scale} to object: {obj.name}")
-            elif target_size is not None:
-                bbox_size = max(obj.dimensions)
-                if bbox_size > 0:
-                    scale_factor = target_size / bbox_size
-                    obj.scale = (scale_factor, scale_factor, scale_factor)
-                    print(f"  Applied scale factor: {scale_factor} to object: {obj.name} for target size: {target_size}")
-            else:
-                obj.scale = (1.0, 1.0, 1.0)
-                      
+                                   
             for existing_collection in list(obj.users_collection):
                 existing_collection.objects.unlink(obj)
             col.objects.link(obj)

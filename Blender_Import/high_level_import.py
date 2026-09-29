@@ -116,6 +116,8 @@ def setup_animation(
     scale=None,
     target_size= 200,
     center=False,
+    start_frame: int = 0,
+    end_frame: int = None,
     suppress_vdb_warnings: bool = True,
 ):
     """
@@ -203,6 +205,8 @@ def setup_animation(
                 scale=scale,
                 target_size=None,
                 center=center,
+                start_frame = start_frame,
+                end_frame = end_frame,
                 material=object_material.get(object_name) if object_material is not None else None,
             )
             results["mesh"][object_name] = obj
@@ -222,10 +226,14 @@ def setup_animation(
                   f"(resolved object_name='{object_name}')")
             setup_volume_animation(
                 vdb_dir,
-                object=object_name,
+                object_name=object_name,
                 material=object_material.get(object_name) if object_material is not None else None,
                 suppress_vdb_warnings=suppress_vdb_warnings,
+                start_frame=start_frame,
+                end_frame=end_frame,
             )
             results["volume"].append(object_name)
+            if scale is not None or target_size is not None or center:
+                print(f"  [WARN] scale/target_size/center parameters are ignored for VDB sequence '{object_name}'")
 
     return results

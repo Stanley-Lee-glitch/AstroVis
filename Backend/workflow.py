@@ -443,10 +443,10 @@ def export_volume_vdb_sequence(
             frame_dir = os.path.join(output_dir, f"frame_{frame_num:04d}")
             os.makedirs(frame_dir, exist_ok=True)
             hierarchy_to_multiple_vdbs(hierarchy, field=field, 
-                                        file_name_prefix=os.path.join(frame_dir, f"{object_name}_frame{frame_num}"), log=log, scale=scale)
+                                        file_name_prefix=os.path.join(frame_dir, f"{object_name}_frame_{frame_num}"), log=log, scale=scale)
         else:
             hierarchy_to_vdb(hierarchy, field=field,
-                              file_path=os.path.join(output_dir, f"{object_name}_frame{frame_num}.vdb"), log=log, scale=scale)
+                              file_path=os.path.join(output_dir, f"{object_name}_frame_{frame_num}.vdb"), log=log, scale=scale)
 
     # 1. resolve_slot: check for missing snapshots and build a slot list
     slot_info = resolve_slot(input_dir, start_frame=start_frame, end_frame=end_frame)

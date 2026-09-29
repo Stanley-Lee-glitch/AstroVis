@@ -126,6 +126,8 @@ def hierarchy_to_multiple_vdbs(
         
     global_min = float('inf')
     global_max = float('-inf')
+    global_left_edge = [float('inf'), float('inf'), float('inf')]
+    global_right_edge = [float('-inf'), float('-inf'), float('-inf')]
 
     for level_id, level in hierarchy.levels.items():
         for block_data in level.blocks:
@@ -139,6 +141,8 @@ def hierarchy_to_multiple_vdbs(
 
             global_min = min(global_min, field_values.min())
             global_max = max(global_max, field_values.max())
+            global_left_edge = np.minimum(global_left_edge, np.array(block_data.left_edge)*scale)
+            global_right_edge = np.maximum(global_right_edge, np.array(block_data.right_edge)*scale)
 
             file_name = f"{file_name_prefix}_l{level_id}_b{block_data.block_id}"
             grid_to_vdb(
@@ -151,5 +155,6 @@ def hierarchy_to_multiple_vdbs(
             )
 
     print(f"Field range: Min: {global_min:.4f}, Max: {global_max:.4f}")
+    print(f"Global left edge: {global_left_edge}, Global right edge: {global_right_edge}")
     print(f"Finished exporting {len(hierarchy.levels)} levels with a total of {sum(len(level.blocks) for level in hierarchy.levels.values())} blocks to VDB files.")
     print(f"{'='*50}\n")
