@@ -1,0 +1,1176 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://Stanley-Lee-glitch.github.io/AstroVis/">
+      
+      
+      
+        <link rel="next" href="Backend/Particle_Data/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>AstroVis Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#astrovis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="AstroVis Documentation" class="md-header__button md-logo" aria-label="AstroVis Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AstroVis Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Stanley-Lee-glitch/AstroVis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="Backend/Particle_Data/" class="md-tabs__link">
+          
+  
+  
+  Backend
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="Blender/Animation_setup/" class="md-tabs__link">
+          
+  
+  
+  Blender
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="AstroVis Documentation" class="md-nav__button md-logo" aria-label="AstroVis Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AstroVis Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Stanley-Lee-glitch/AstroVis" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-astrovis-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why AstroVis exists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#general-pipeline-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General pipeline overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickstart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quickstart
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quickstart">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-export-a-backend-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Export a backend volume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-import-the-vdb-sequence-in-blender" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Import the VDB sequence in Blender
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-build-the-blender-scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Build the Blender scene
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example notebooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#main-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main modules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Backend
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Backend/Particle_Data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Backend/Volume_Data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volume Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Backend/Save_and_load/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Save and Load
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Blender
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Blender
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Blender/Animation_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Blender/Node_and_shading/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node and Shading
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Blender/Object_and_scene/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Object and Scene
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-astrovis-exists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why AstroVis exists
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#general-pipeline-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General pipeline overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickstart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quickstart
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quickstart">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-export-a-backend-volume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Export a backend volume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-import-the-vdb-sequence-in-blender" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Import the VDB sequence in Blender
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-build-the-blender-scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Build the Blender scene
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-notebooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example notebooks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#main-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Main modules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="astrovis">AstroVis</h1>
+<p><strong>A Python package for moving astrophysical simulation data into Blender for 3D rendering and animation.</strong></p>
+<p>AstroVis turns hydrodynamic simulation outputs into Blender-ready particles, surfaces, and volumes. It separates the workflow into a <strong>backend data-processing layer</strong> and a <strong>Blender presentation layer</strong>, so heavy scientific processing can happen in a normal Python environment while rendering and scene assembly happen inside Blender.</p>
+<h2 id="table-of-contents">Table of contents</h2>
+<ul>
+<li><a href="#why-astrovis-exists">Why AstroVis exists</a></li>
+<li><a href="#general-pipeline-overview">General pipeline overview</a></li>
+<li><a href="#installation">Installation</a></li>
+<li><a href="#quickstart">Quickstart</a></li>
+<li><a href="#example-notebooks">Example notebooks</a></li>
+<li><a href="#main-modules">Main modules</a></li>
+</ul>
+<h2 id="why-astrovis-exists">Why AstroVis exists</h2>
+<p>Standard simulation inspection tools are excellent for fast analysis, but they are not designed around physically rich 3D presentation. AstroVis bridges that gap so you can:</p>
+<ul>
+<li>render <strong>volumetric fields</strong> such as density or temperature with Blender volume shaders,</li>
+<li>extract <strong>surfaces</strong> from SPH or AMR data and animate them as meshes,</li>
+<li>keep <strong>time series</strong> data synchronized as Blender animation,</li>
+<li>build <strong>repeatable scenes</strong> with scripted materials, lights, and camera setup.</li>
+</ul>
+<h2 id="general-pipeline-overview">General pipeline overview</h2>
+<pre><code class="language-text">Simulation snapshots
+    |
+    | yt.load(...)
+    v
+Backend/
+    particle_data.py          -&gt; SPHParticleData
+    volume_data.py            -&gt; FieldHierarchy / GridBlock
+    sph_particle_to_grid.py   -&gt; SPH -&gt; grid
+    grid_to_surface.py        -&gt; grid -&gt; SurfaceData
+    grid_to_vdb.py            -&gt; grid / hierarchy -&gt; .vdb
+    save_load_hdf5.py         -&gt; unified .h5/.hdf5 exchange format
+    |
+    +--&gt; HDF5 animation payloads (.h5/.hdf5) for particles / surfaces
+    |
+    +--&gt; OpenVDB sequences (.vdb) for volumes
+    v
+Blender_Import/
+    setup_animation()         -&gt; high-level HDF5 + VDB import
+    setup_mesh_animation()    -&gt; particle / surface animation
+    setup_volume_animation()  -&gt; volume sequence import
+    v
+Blender_Effect/
+    material.py               -&gt; data-driven materials
+    node.py                   -&gt; Geometry Nodes effects
+    object.py                 -&gt; object / modifier helpers
+    scene.py                  -&gt; scene, camera, lights, render helpers
+</code></pre>
+<h2 id="installation">Installation</h2>
+<p>Core backend dependencies:</p>
+<pre><code class="language-bash">pip install numpy h5py scipy scikit-image trimesh matplotlib numba yt
+conda install -c conda-forge openvdb
+</code></pre>
+<p>AstroVis now targets <strong>Python 3.11</strong> with <strong><code>openvdb</code></strong> as the supported VDB backend.</p>
+<p>The <code>Blender_Import</code> and <code>Blender_Effect</code> modules must run inside Blender's Python environment because they depend on <code>bpy</code>.</p>
+<h2 id="quickstart">Quickstart</h2>
+<h3 id="1-export-a-backend-volume">1. Export a backend volume</h3>
+<p>Run this in a normal Python environment:</p>
+<pre><code class="language-python">from AstroVis.backend import export_volume_sequence
+
+result = export_volume_sequence(&quot;snapshots&quot;, &quot;exports&quot;, field=&quot;density&quot;)
+print(result[&quot;field_range&quot;])
+</code></pre>
+<h3 id="2-import-the-vdb-sequence-in-blender">2. Import the VDB sequence in Blender</h3>
+<p>Run this inside Blender:</p>
+<pre><code class="language-python">from AstroVis.api import create_field_volume_material, setup_volume_animation
+
+material, _ = create_field_volume_material(
+    &quot;Gas&quot;,
+    field=&quot;density&quot;,
+    field_min=-8.0,
+    field_max=0.0,
+    cmap_name=&quot;inferno&quot;,
+    apply=False,
+)[&quot;Gas&quot;]
+
+setup_volume_animation(
+    r&quot;C:\Path\To\exports&quot;,
+    object=&quot;Gas&quot;,
+    material=material,
+    suppress_vdb_warnings=True,
+)
+</code></pre>
+<p><code>setup_volume_animation()</code> uses Blender's native VDB import operator. When <code>suppress_vdb_warnings=True</code>, AstroVis hides the repeated forward-compatibility warning lines that some Blender/OpenVDB builds print even when import succeeds.</p>
+<h3 id="3-build-the-blender-scene">3. Build the Blender scene</h3>
+<pre><code class="language-python">from AstroVis.api import SceneManager
+
+scene = SceneManager(scene_name=&quot;AstroScene&quot;, export_dir=r&quot;C:\Path\To\renders&quot;)
+scene.set_world_background(color=(0.0, 0.0, 0.0, 1.0), strength=0.02)
+scene.set_camera(location=(8, -8, 5), look_at=(0, 0, 0), lens=45)
+scene.set_light(location=(5, -5, 8), light_type=&quot;SUN&quot;, energy=3.0, size=0.15)
+scene.add_light_grid(
+    name_prefix=&quot;Fill&quot;,
+    count_x=3,
+    count_y=3,
+    spacing=(2.5, 2.5),
+    center=(0.0, 0.0, 0.0),
+    height=3.5,
+    light_type=&quot;POINT&quot;,
+    energy=200.0,
+    size=0.2,
+)
+scene.set_render(engine=&quot;CYCLES&quot;, samples=128, resolution=(1920, 1080))
+</code></pre>
+<h2 id="example-notebooks">Example notebooks</h2>
+<p>The <code>Example/</code> folder contains end-to-end notebooks that mirror the documented workflows:</p>
+<ul>
+<li><code>Rendering Particle Mesh.ipynb</code> - animate SPH particles directly in Blender</li>
+<li><code>Rendering Surface.ipynb</code> - extract SPH-derived surfaces and import them as animated meshes</li>
+<li><code>Rendering Volume Snapshots.ipynb</code> - export AMR volumes to OpenVDB and import them into Blender</li>
+</ul>
+<p>These notebooks are intended as working templates rather than exhaustive tutorials.</p>
+<h2 id="main-modules">Main modules</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Backend/particle_data.py</code></td>
+<td>Load and store SPH particle data from <code>yt</code>.</td>
+</tr>
+<tr>
+<td><code>Backend/volume_data.py</code></td>
+<td>Load AMR/grid data into <code>FieldHierarchy</code>.</td>
+</tr>
+<tr>
+<td><code>Backend/grid_to_surface.py</code></td>
+<td>Convert scalar grids into surface meshes.</td>
+</tr>
+<tr>
+<td><code>Backend/grid_to_vdb.py</code></td>
+<td>Convert scalar grids into OpenVDB output.</td>
+</tr>
+<tr>
+<td><code>Backend/save_load_hdf5.py</code></td>
+<td>Save/load unified AstroVis animation payloads.</td>
+</tr>
+<tr>
+<td><code>Blender_Import/mesh_animation.py</code></td>
+<td>Animate particles or surfaces in Blender.</td>
+</tr>
+<tr>
+<td><code>Blender_Import/volume_animation.py</code></td>
+<td>Import VDB sequences frame-by-frame.</td>
+</tr>
+<tr>
+<td><code>Blender_Effect/material.py</code></td>
+<td>Build procedural mesh and volume materials.</td>
+</tr>
+<tr>
+<td><code>Blender_Effect/node.py</code></td>
+<td>Add Geometry Nodes effects and selections.</td>
+</tr>
+<tr>
+<td><code>Blender_Effect/scene.py</code></td>
+<td>Manage camera, lights, cleanup, world, and render settings.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-documentation">Related documentation</h2>
+<ul>
+<li><a href="Backend/Volume_Data/"><code>Backend/Volume_Data.md</code></a></li>
+<li><a href="Backend/Particle_Data/"><code>Backend/Particle_Data.md</code></a></li>
+<li><a href="Backend/Save_and_load/"><code>Backend/Save_and_load.md</code></a></li>
+<li><a href="Blender/Animation_setup/"><code>Blender/Animation_setup.md</code></a></li>
+<li><a href="Blender/Node_and_shading/"><code>Blender/Node_and_shading.md</code></a></li>
+<li><a href="Blender/Object_and_scene/"><code>Blender/Object_and_scene.md</code></a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "search.suggest"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
