@@ -156,7 +156,7 @@ class FieldHierarchy:
                     continue
                 if count != expected_non_max:
                     block_per_axis_source += (
-                        f"; note: level {lvl} has {count} grids, expected {expected_non_max} "
+                        f"; note: level {lvl} has {len(count)} grids, expected {expected_non_max} "
                         f"for block_per_axis={suggested_block_per_axis}."
                     )
                     break

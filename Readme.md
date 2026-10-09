@@ -55,7 +55,43 @@ In short: **export from `backend`, outside Blender. Import and build the scene f
 
 ## Installation
 
-### Step 1: Install Python dependencies (for the Backend step)
+
+### Step 1: Clone the Repository
+
+This repository tracks heavy, full-sequence simulation datasets using **Git LFS**. 
+
+You may download Git LFS through conda:
+```bash
+conda install -c conda-forge git-lfs -y
+```
+
+💡 **Note:** To run the example, you must install LFS to pull the dataset.
+
+Choose the cloning option that best fits your environment and storage needs. Ignore the LFS error if you do not install it.
+
+#### Option A: Skip full example datasets (Recommended)
+This downloads the source code and the default lightweight single-frame data instantly, while replacing the heavy full-sequence datasets with tiny text placeholders.
+```bash
+git lfs install
+GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/Stanley-Lee-glitch/AstroVis
+cd AstroVis
+```
+If you need specific dataset afterward, for example, frame 120-129 in Example of Star_Formation, you may download by
+```
+git lfs fetch --exclude="*"
+git lfs pull --include="Example/Star_Formation/Data/star_formation_test_012*.athdf"
+```
+
+
+#### Option B: Clone all example dataset
+This will download the entire repository along with every gigabyte of full-sequence simulation data mapped to this project. 
+⚠️ **Warning:** This may take a long time and requires significant disk space.
+```bash
+git lfs install
+git clone https://github.com/Stanley-Lee-glitch/AstroVis
+cd AstroVis
+```
+### Step 2: Install Python dependencies (for the Backend step)
 
 AstroVis targets **Python 3.11**. This is the Python you use for the export step (Step 1 of the Quickstart below).
 
@@ -75,12 +111,6 @@ Only needed if you plan to call `export_volume_vdb_sequence`, `export_particle_v
 conda install -c conda-forge openvdb
 ```
 
-
-### Step 2: Clone the repository
-
-```bash
-git clone https://github.com/stanley-lee-glitch/AstroVis.git
-```
 
 ### Step 3: Set up Blender's Python interface
 
